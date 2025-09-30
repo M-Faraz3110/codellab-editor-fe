@@ -1,9 +1,12 @@
 import { WSMessage, Operation } from '../types'
 
-export default class WSClient {
+class WSClient {
   ws: WebSocket | null = null
   url: string
   onMessage: (msg: WSMessage)=>void = ()=>{}
+  onOpen?: () => void;
+  onClose?: (ev: CloseEvent) => void;
+  onError?: (ev: Event) => void;
 
   constructor(url: string){
     this.url = url
@@ -28,7 +31,6 @@ export default class WSClient {
     this.ws.onopen = ()=>console.log('ws open')
     this.ws.onclose = () => console.log('ws close')
     this.ws.onerror = (ev) => console.log("ws error", ev)
-    this.ws.onmessage = (ev) => console.log("ws message", ev.data)
     this.ws.onclose = (ev) => console.log("ws close", ev.code, ev.reason)  
   }
 
@@ -46,10 +48,18 @@ export default class WSClient {
     this.send({ type: 'operation', id, operation: op })
   }
 
-  sendDocumentUpdate(id: string, update: { title?: string | null; content?: string | null; language?: string | null }): void {
-    this.send({ type: 'document_update', id, update })
+  sendDocumentUpdate(id: string, update: { title?: string | null; language?: string | null }): void {
+    this.send({ type: 'document_update', id, document_update: update })
   }
 
+  sendSnapshotUpdate(id: string, update: {content?: string | null }): void {
+    this.send({ type: 'snapshot', id, snapshot: update })
+  }
+
+  sendReady(payload: any) {
+    this.send(payload);
+  }
+    
   disconnect(): void{
     console.log("WSClient.disconnect called", this.ws?.readyState)
     if (!this.ws) return
@@ -59,3 +69,16 @@ export default class WSClient {
     this.ws = null
   }
 }
+
+// Singleton wrapper that survives HMR
+const getGlobalWS = (url: string) => {
+  const key = "__CODELAB_WS_CLIENT__";
+  // @ts-ignore
+  if (!window[key]) {
+    // @ts-ignore
+    window[key] = new WSClient(url);
+  }
+  // @ts-ignore
+  return window[key] as WSClient;
+};
+export default getGlobalWS;

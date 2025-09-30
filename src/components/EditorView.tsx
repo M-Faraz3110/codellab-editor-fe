@@ -6,6 +6,7 @@ import { getDocument } from '../services/api'
 import type { Operation } from '../types'
 import { simpleDiff } from '../utils/diff'
 import { Console } from 'console'
+import getGlobalWS from '../services/wsClient'
 
 const LANGUAGES = [
     { id: 'javascript', label: 'JavaScript' },
@@ -26,55 +27,89 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
     const [content, setContent] = useState<string>('')
     const [language, setLanguage] = useState<string>(initialLanguage || 'javascript')
     const [title, setTitle] = useState<string>('')
-    const wsRef = useRef<WSClient | null>(null)
+    const wsRef = useRef<ReturnType<typeof getGlobalWS> | null>(null);
     const monacoRef = useRef<Monaco | null>(null)
     type EditorInstance = MonacoEditor.editor.IStandaloneCodeEditor
     const editorRef = useRef<EditorInstance | null>(null)
+    const WS_URL = import.meta.env.VITE_BACKEND_WS
+        ? `${import.meta.env.VITE_BACKEND_WS}/${id}`
+        : `ws://localhost:8080/ws/${id}`;
+    const contentRef = useRef(content);
 
     useEffect(() => {
-        let mounted = true
+        contentRef.current = content; // keep ref in sync
+    }, [content]);
 
-            ; (async () => {
-                try {
-                    const d = await getDocument(id)
-                    if (!mounted) return
-                    setContent(d.content || "")
-                    setTitle(d.title || "")
-                    if (d.language) setLanguage(d.language)
-                } catch (err) {
-                    console.warn("getDocument failed for id", id, err)
-                }
-            })()
 
-        const WS_URL = import.meta.env.VITE_BACKEND_WS
-            ? `${import.meta.env.VITE_BACKEND_WS}/${id}`
-            : `ws://localhost:3000/${id}`
 
-        console.log("connecting to", WS_URL)
+    useEffect(() => {
+        let mounted = true;
 
-        const ws = new WSClient(WS_URL)
+        // Get the singleton WS client
+        const ws = getGlobalWS(WS_URL);
+        wsRef.current = ws;
 
+        // Attach message handler
         ws.onMessage = (msg) => {
-            if (
-                msg.type === "update" &&
-                msg.id === id &&
-                typeof msg.content === "string"
-            ) {
-                setContent(msg.content)
-            }
-        }
+            if (!msg || !mounted) return;
+            console.log("received msg")
+            switch (msg.type) {
+                case "snapshot": {
+                    // Backend sent full document state
+                    console.log("received snapshot")
+                    if (typeof msg.content === "string") setContent(msg.content);
+                    if (msg.type === "snapshot") {
+                        if (msg.title === "string") {
+                            setTitle(msg.title);
+                        }
+                        if (msg.language === "string") {
+                            setLanguage(msg.language);
+                        }
+                    }
 
-        ws.connect()
-        wsRef.current = ws
+                    break;
+                }
+                case "update": {
+                    // Operational updates from other users
+                    if (msg.id === id && typeof msg.content === "string") {
+                        setContent(msg.content);
+                    }
+                    break;
+                }
+                case "user_joined":
+                case "user_left":
+                    // handle presence updates if needed
+                    break;
+            }
+        };
+
+        // Attach onOpen handler — send init handshake after component is ready
+        ws.onOpen = () => {
+            console.log("WS open — sending init handshake");
+
+            // Delay zero to let React fully wire state/handlers
+            setTimeout(() => {
+                ws.sendReady({ type: "init", id, username: "Anonymous" });
+            }, 0);
+        };
+
+        // Attach onClose/error handlers for debugging
+        ws.onClose = (ev) => console.log("WS closed", ev.code, ev.reason);
+        ws.onError = (ev) => console.log("WS error", ev);
+
+        // Connect (or reuse singleton)
+        ws.connect();
 
         return () => {
-            mounted = false
-            if (wsRef.current) {
-                wsRef.current?.disconnect()
-                wsRef.current = null
-            }
-        }
-    }, [id])
+            mounted = false;
+
+            // Optionally disconnect (singleton allows you to keep connection across HMR)
+            ws.disconnect();
+            wsRef.current = null;
+        };
+    }, [id]);
+
+
 
 
     // When the language state changes and Monaco has mounted, apply the language to the model.
@@ -86,18 +121,39 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
         if (model) monaco.editor.setModelLanguage(model, language)
     }, [language, monacoRef.current, editorRef.current])
 
-    // Debounced sender for document metadata updates
-    const sendDocUpdate = useRef(
+    // // Debounced sender for document metadata updates
+    // const sendDocUpdate = useRef(
+    //     debounce((lang?: string | null, titleVal?: string | null) => {
+    //         const ws = wsRef.current
+    //         if (!ws) return
+    //         ws.sendDocumentUpdate(id, { language: lang ?? null, title: titleVal ?? null })
+    //     }, 300)
+    // )
+
+    // For metadata (title/lang) updates
+    const sendMetadataUpdate = useRef(
         debounce((lang?: string | null, titleVal?: string | null) => {
-            const ws = wsRef.current
-            if (!ws) return
-            ws.sendDocumentUpdate(id, { language: lang ?? null, title: titleVal ?? null })
+            console.log(language)
+            console.log(title)
+            wsRef.current?.sendDocumentUpdate(id, {
+                language: lang,
+                title: titleVal
+            })
         }, 300)
     )
 
-    function handleTitleChange(v: string) {
-        setTitle(v)
-        sendDocUpdate.current(language, v)
+    // For snapshot persistence (full document save)
+    const sendSnapshotUpdate = useRef(
+        debounce(() => {
+            wsRef.current?.sendSnapshotUpdate(id, {
+                content: contentRef.current
+            })
+        }, 5000) // every ~5s of idle time
+    )
+
+    function handleTitleChange(title: string) {
+        setTitle(title)
+        sendMetadataUpdate.current(language, title)
     }
 
     // function flushChanges() {
@@ -111,6 +167,7 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
         const newContent = value || ''
         const oldContent = content
         setContent(newContent)
+        console.log(content)
 
         // compute diffs using local simpleDiff and emit Operation messages
         const diffs = simpleDiff(oldContent, newContent)
@@ -126,6 +183,7 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
                     type: 'delete',
                     position: cursor,
                     length: txt.length,
+                    content: txt,
                     client_id: clientId,
                     timestamp: Date.now()
                 }
@@ -136,6 +194,7 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
                 const op: Operation = {
                     type: 'insert',
                     position: cursor,
+                    length: txt.length,
                     content: txt,
                     client_id: clientId,
                     timestamp: Date.now()
@@ -146,7 +205,7 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
             }
         }
         // also send the content as a document_update after debounce (so backend can persist snapshot)
-        sendDocUpdate.current(null, null) // content already being sent via operations; optional snapshot
+        sendSnapshotUpdate.current() // content already being sent via operations; optional snapshot
     }
 
     function handleEditorMount(editor: EditorInstance, monaco: Monaco): void {
@@ -167,7 +226,7 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
             if (model) monaco.editor.setModelLanguage(model, lang)
         }
         // send debounced document language update
-        sendDocUpdate.current(lang, title)
+        sendMetadataUpdate.current(lang, title)
     }
 
     async function formatContent(): Promise<void> {

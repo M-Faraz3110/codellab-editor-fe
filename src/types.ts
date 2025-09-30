@@ -15,6 +15,7 @@ export type Operation = {
 export type WSMessage =
   | { type: 'operation'; id: string; operation: Operation }
   | { type: 'document_update'; id: string; update: DocumentUpdate }
+  | { type: 'snapshot';  id: string, content: string, title?: string, language?: string}
   | { type: string; [key: string]: unknown }
 
 export type DocumentUpdate = {
