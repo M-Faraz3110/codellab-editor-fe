@@ -1,0 +1,12 @@
+:root{ font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial }
+html,body,#root{ height:100%; margin:0 }
+.app{ display:flex; height:100vh }
+.sidebar{ width:260px; border-right:1px solid #ddd; padding:12px; box-sizing:border-box }
+.sidebar h2{ margin:0 0 8px }
+.doc-list{ list-style:none; padding:0; margin:8px 0 }
+.doc-list li{ display:flex; justify-content:space-between; gap:8px; margin-bottom:6px }
+.doc-list .link{ background:none; border:none; color:#0366d6; cursor:pointer }
+.doc-list .danger{ background:#f8d7da; border:1px solid #f5c2c7 }
+.editor{ flex:1; height:100% }
+.placeholder{ padding:24px; color:#666 }
+.editor-root{ height:100% }
