@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { listDocuments, createDocument, deleteDocument, getDocument } from './services/api'
 import DocumentList from './components/DocumentList'
 import EditorView from './components/EditorView'
+import { NewDocumentView } from './components/NewDocumentView'
 
 const LANGUAGES = [
     { id: 'javascript', label: 'JavaScript' },
@@ -17,6 +18,53 @@ export default function App() {
     const [showCreate, setShowCreate] = useState(false)
     const [newTitle, setNewTitle] = useState('Untitled')
     const [newLang, setNewLang] = useState('javascript')
+    const [activeDoc, setActiveDoc] = useState<any | null>(null)
+    const url = new URL(window.location.href)
+    const idFromUrl = url.searchParams.get('id')
+
+    useEffect(() => {
+        const url = new URL(window.location.href)
+        const id = url.searchParams.get('id')
+        if (id) {
+            setActiveId(id)  // triggers EditorView mount
+            replaceIdInUrl(id)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    function replaceIdInUrl(id: string | null) {
+        const url = new URL(window.location.href)
+        if (id) {
+            url.searchParams.set('id', id)
+        }
+        // update the URL without reloading the page
+        window.history.replaceState(null, '', url.toString())
+    }
+
+    async function handleShare() {
+        if (!activeDoc) return
+        const url = window.location.href // already contains ?id=...
+        // prefer Web Share API when available (mobile)
+        if ((navigator as any).share) {
+            try {
+                await (navigator as any).share({ title: activeDoc.title || 'Code document', url })
+                return
+            } catch (err) {
+                // fallthrough to clipboard method on failure
+                console.warn('Web share failed, copying to clipboard', err)
+            }
+        }
+
+        // fallback: copy link to clipboard
+        try {
+            await navigator.clipboard.writeText(url)
+            // simple user feedback — replace with your toast if you have one
+            alert('Document link copied to clipboard!')
+        } catch (err) {
+            console.error('Clipboard write failed', err)
+            alert('Unable to copy link automatically. Please copy the URL from your address bar.')
+        }
+    }
 
     useEffect(() => {
         fetchDocs()
@@ -60,39 +108,33 @@ export default function App() {
 
     function handleOpen(id: string) {
         const doc = docs.find(d => d.id === id)
+        console.log("current active id: " + id)
         setActiveId(id)
         setActiveLanguage(doc?.language)
     }
 
-    return (
-        <div className="app">
-            <aside className="sidebar">
-                <h2>Documents</h2>
-                <button onClick={() => setShowCreate(true)}>New</button>
-                {showCreate && (
-                    <div style={{ padding: 8, border: '1px solid #ddd', marginTop: 8, borderRadius: 4 }}>
-                        <div style={{ marginBottom: 8 }}>
-                            <label style={{ display: 'block', fontSize: 13 }}>Title</label>
-                            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-                        </div>
-                        <div style={{ marginBottom: 8 }}>
-                            <label style={{ display: 'block', fontSize: 13 }}>Language</label>
-                            <select value={newLang} onChange={(e) => setNewLang(e.target.value)}>
-                                {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-                            </select>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <button onClick={handleCreate}>Create</button>
-                            <button onClick={() => setShowCreate(false)}>Cancel</button>
-                        </div>
-                    </div>
-                )}
+    // If there’s an id in the URL, show editor; otherwise show creation form
+    if (idFromUrl) {
+        <EditorView id={idFromUrl} initialContent={''} initialLanguage={activeLanguage} />
+    }
 
-                <DocumentList docs={docs} onOpen={handleOpen} onDelete={handleDelete} />
-            </aside>
-            <main className="editor">
-                {activeId ? <EditorView id={activeId} initialLanguage={activeLanguage} /> : <div className="placeholder">Open a document to edit</div>}
-            </main>
+
+    return (
+        <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100vh',    // fill viewport height
+                width: '100vw',     // fill viewport width
+            }}
+        >
+            {idFromUrl ? (
+                <div style={{ flex: 1, minHeight: 0 }}>
+                    <EditorView id={idFromUrl} initialContent={''} initialLanguage={activeLanguage} />
+                </div>
+            ) : (
+                <NewDocumentView onCreated={handleCreate} />
+            )}
         </div>
     )
 }

@@ -23,7 +23,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, wait = 300) {
     }
 }
 
-export default function EditorView({ id, initialLanguage }: { id: string; initialLanguage?: string }) {
+export default function EditorView({ id, initialContent, initialLanguage }: { id: string; initialContent?: string; initialLanguage?: string }) {
     const [content, setContent] = useState<string>('')
     const [language, setLanguage] = useState<string>(initialLanguage || 'javascript')
     const [title, setTitle] = useState<string>('')
@@ -39,6 +39,13 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
     useEffect(() => {
         contentRef.current = content; // keep ref in sync
     }, [content]);
+
+    // Sync local content state when the prop changes
+    useEffect(() => {
+        if (initialContent !== undefined) {
+            setContent(initialContent)
+        }
+    }, [initialContent])
 
 
 
@@ -58,13 +65,11 @@ export default function EditorView({ id, initialLanguage }: { id: string; initia
                     // Backend sent full document state
                     console.log("received snapshot")
                     if (typeof msg.content === "string") setContent(msg.content);
-                    if (msg.type === "snapshot") {
-                        if (msg.title === "string") {
-                            setTitle(msg.title);
-                        }
-                        if (msg.language === "string") {
-                            setLanguage(msg.language);
-                        }
+                    if (msg.title === "string") {
+                        setTitle(msg.title);
+                    }
+                    if (msg.language === "string") {
+                        setLanguage(msg.language);
                     }
 
                     break;

@@ -70,15 +70,22 @@ class WSClient {
   }
 }
 
-// Singleton wrapper that survives HMR
+// Singleton wrapper that survives HMR but is keyed by URL
 const getGlobalWS = (url: string) => {
-  const key = "__CODELAB_WS_CLIENT__";
+  const key = "__CODELLAB_WS_CLIENT_MAP__";
   // @ts-ignore
   if (!window[key]) {
     // @ts-ignore
-    window[key] = new WSClient(url);
+    window[key] = {} as Record<string, WSClient>;
+  }
+  // use url as the map key so each room/document URL gets its own WSClient
+  // (normalize url to avoid characters that cause issues, or use the full url)
+  // @ts-ignore
+  if (!window[key][url]) {
+    // @ts-ignore
+    window[key][url] = new WSClient(url);
   }
   // @ts-ignore
-  return window[key] as WSClient;
+  return window[key][url] as WSClient;
 };
 export default getGlobalWS;
