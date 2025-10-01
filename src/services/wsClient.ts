@@ -49,11 +49,13 @@ class WSClient {
   }
 
   sendDocumentUpdate(id: string, update: { title?: string | null; language?: string | null }): void {
-    this.send({ type: 'document_update', id, document_update: update })
+    this.send({ type: 'document_update', id, update: update })
   }
 
-  sendSnapshotUpdate(id: string, update: {content?: string | null }): void {
-    this.send({ type: 'snapshot', id, snapshot: update })
+  sendSnapshotUpdate(id: string, update: { content?: string | null }): void {
+    if (update.content) {
+      this.send({ type: 'snapshot', id, content: update.content })
+    }
   }
 
   sendReady(payload: any) {

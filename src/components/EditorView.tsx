@@ -3,7 +3,7 @@ import Editor, { Monaco } from '@monaco-editor/react'
 import type * as MonacoEditor from 'monaco-editor'
 import WSClient from '../services/wsClient'
 import { getDocument } from '../services/api'
-import type { Operation } from '../types'
+import type { Operation, WSMessage } from '../types'
 import { simpleDiff } from '../utils/diff'
 import { Console } from 'console'
 import getGlobalWS from '../services/wsClient'
@@ -13,6 +13,7 @@ const LANGUAGES = [
     { id: 'typescript', label: 'TypeScript' },
     { id: 'json', label: 'JSON' },
     { id: 'python', label: 'Python' },
+    { id: 'text', label: 'Text' }
 ]
 
 function debounce<T extends (...args: any[]) => void>(fn: T, wait = 300) {
@@ -27,6 +28,8 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     const [content, setContent] = useState<string>('')
     const [language, setLanguage] = useState<string>(initialLanguage || 'javascript')
     const [title, setTitle] = useState<string>('')
+    const [loading, setLoading] = useState<boolean>(true)
+    const [connected, setConnected] = useState<boolean>(false)
     const wsRef = useRef<ReturnType<typeof getGlobalWS> | null>(null);
     const monacoRef = useRef<Monaco | null>(null)
     type EditorInstance = MonacoEditor.editor.IStandaloneCodeEditor
@@ -40,6 +43,15 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         contentRef.current = content; // keep ref in sync
     }, [content]);
 
+    useEffect(() => {
+        const monaco = monacoRef.current;
+        const editor = editorRef.current;
+        if (!monaco || !editor) return;
+
+        const model = editor.getModel();
+        if (model) monaco.editor.setModelLanguage(model, language);
+    }, [language]);
+
     // Sync local content state when the prop changes
     useEffect(() => {
         if (initialContent !== undefined) {
@@ -47,9 +59,10 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         }
     }, [initialContent])
 
-
+    const debouncedFormat = debounce(() => formatContent(), 1000);
 
     useEffect(() => {
+        setLoading(true)
         let mounted = true;
 
         // Get the singleton WS client
@@ -57,32 +70,46 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         wsRef.current = ws;
 
         // Attach message handler
-        ws.onMessage = (msg) => {
+        ws.onMessage = (msg: WSMessage) => {
             if (!msg || !mounted) return;
-            console.log("received msg")
             switch (msg.type) {
                 case "snapshot": {
                     // Backend sent full document state
                     console.log("received snapshot")
-                    if (typeof msg.content === "string") setContent(msg.content);
-                    if (msg.title === "string") {
+                    setLoading(false)
+                    setConnected(true)
+                    console.log("content: " + typeof msg.content)
+                    if (typeof msg.content === "string") {
+                        console.log("received" + msg.content)
+                        setContent(msg.content);
+                    }
+                    if (typeof msg.title === "string") {
                         setTitle(msg.title);
                     }
-                    if (msg.language === "string") {
+                    if (typeof msg.language === "string") {
+                        console.log("change lang")
                         setLanguage(msg.language);
                     }
 
                     break;
                 }
-                case "update": {
-                    // Operational updates from other users
-                    if (msg.id === id && typeof msg.content === "string") {
-                        setContent(msg.content);
+                case "operation": {
+                    console.log('operation received')
+                    if (msg.operation) {
+                        const op: Operation = msg.operation;
+                        setContent(prev => applyOperation(prev, op))
                     }
                     break;
                 }
-                case "user_joined":
-                case "user_left":
+                case "document_update": {
+                    // Operational updates from other users
+                    // if (msg.id === id && typeof msg.content === "string") {
+                    //     setContent(msg.content);
+                    // }
+                    break;
+                }
+                    // case "user_joined":
+                    // case "user_left":
                     // handle presence updates if needed
                     break;
             }
@@ -90,6 +117,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
 
         // Attach onOpen handler — send init handshake after component is ready
         ws.onOpen = () => {
+            setConnected(true)
             console.log("WS open — sending init handshake");
 
             // Delay zero to let React fully wire state/handlers
@@ -117,14 +145,14 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
 
 
 
-    // When the language state changes and Monaco has mounted, apply the language to the model.
-    useEffect(() => {
-        const monaco = monacoRef.current
-        const editor = editorRef.current
-        if (!monaco || !editor) return
-        const model = editor.getModel() as MonacoEditor.editor.ITextModel | null
-        if (model) monaco.editor.setModelLanguage(model, language)
-    }, [language, monacoRef.current, editorRef.current])
+    // // When the language state changes and Monaco has mounted, apply the language to the model.
+    // useEffect(() => {
+    //     const monaco = monacoRef.current
+    //     const editor = editorRef.current
+    //     if (!monaco || !editor) return
+    //     const model = editor.getModel() as MonacoEditor.editor.ITextModel | null
+    //     if (model) monaco.editor.setModelLanguage(model, language)
+    // }, [language, monacoRef.current, editorRef.current])
 
     // // Debounced sender for document metadata updates
     // const sendDocUpdate = useRef(
@@ -160,6 +188,33 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         setTitle(title)
         sendMetadataUpdate.current(language, title)
     }
+
+    function applyOperation(doc: string, op: Operation): string {
+        switch (op.type) {
+            case "insert":
+                return (
+                    doc.slice(0, op.position) +
+                    op.content +
+                    doc.slice(op.position)
+                );
+
+            case "delete":
+                if (op.length) {
+                    return (
+                        doc.slice(0, op.position) +
+                        doc.slice(op.position + op.length)
+                    );
+                }
+            case "retain":
+                // retain means "no change", just keep doc
+                return doc;
+
+            default:
+                console.warn("Unknown op type:", op.type);
+                return doc;
+        }
+    }
+
 
     // function flushChanges() {
     //     console.log("IN FLUSHER")
@@ -210,6 +265,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             }
         }
         // also send the content as a document_update after debounce (so backend can persist snapshot)
+        debouncedFormat()
         sendSnapshotUpdate.current() // content already being sent via operations; optional snapshot
     }
 
@@ -234,6 +290,58 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         sendMetadataUpdate.current(lang, title)
     }
 
+    const handleShare = async () => {
+        const url = new URL(window.location.href)
+        url.searchParams.set("id", id)
+        const href = url.toString()
+        // if ((navigator as any).share) {
+        //     try {
+        //         await (navigator as any).share({ title: title ?? "Code document", url: href })
+        //         return
+        //     } catch (err) {
+        //         // fall back to clipboard
+        //     }
+        // }
+        try {
+            await navigator.clipboard.writeText(href)
+            // small visual feedback
+            // you may replace alert with your toast if you have one
+            alert("Link copied to clipboard!")
+        } catch (err) {
+            // fallback: show URL in prompt for manual copy
+            // eslint-disable-next-line no-alert
+            window.prompt("Copy link to share:", href)
+        }
+    }
+
+    if (loading) {
+        return (
+            <div style={outerContainerStyle}>
+                <div style={headerStyle}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <div style={logoStyle}>CL</div>
+                        <div>
+                            <div style={{ color: "#61dafb", fontSize: 20, fontWeight: 700 }}>Codellab</div>
+                            <div style={{ color: "#9cdcfe", fontSize: 12 }}>{language ?? "loading…"}</div>
+                        </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <div style={{ color: connected ? "#9fe0a6" : "#f6c85f", fontSize: 13 }}>
+                            {connected ? "connected" : "connecting..."}
+                        </div>
+                        <button onClick={handleShare} style={shareButtonStyle}>Share</button>
+                    </div>
+                </div>
+
+                <div style={centerCardStyle}>
+                    <div style={{ color: "#9fb8d6" }}>Loading document…</div>
+                </div>
+            </div>
+        )
+    }
+
+
     async function formatContent(): Promise<void> {
         const editor = editorRef.current
         const monaco = monacoRef.current
@@ -254,30 +362,46 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     }
 
     return (
-        <div className="editor-root" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: 8, borderBottom: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={outerContainerStyle}>
+            <div style={headerStyle}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <div style={logoStyle}>CL</div>
                     <div>
-                        <div style={{ fontSize: 12, color: '#666' }}>Title</div>
-                        <div>
-                            <input value={title || 'Untitled'} onChange={(e) => handleTitleChange(e.target.value)} style={{ fontSize: 16, fontWeight: 600, border: 'none', background: 'transparent' }} />
-                        </div>
+                        <div style={{ color: "#61dafb", fontSize: 20, fontWeight: 700 }}>{title ?? "Untitled"}</div>
                     </div>
-                    <label style={{ fontSize: 13 }}>Language:</label>
-                    <select value={language} onChange={(e) => changeLanguage(e.target.value)}>
-                        {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-                    </select>
-                    <button onClick={formatContent}>Format</button>
+                </div>
+
+                {/* right side: connection status + sleek share button */}
+                <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+                    <div style={{ color: connected ? "#9fe0a6" : "#f6c85f", fontSize: 13 }}>
+                        {connected ? "connected" : "connecting..."}
+                    </div>
+                    <button onClick={handleShare} style={createLikeButtonStyle}>Share</button>
                 </div>
             </div>
-            <div style={{ flex: 1 }}>
-                <Editor
-                    height="100%"
-                    language={language}
+
+            {/* Editor area: position:relative so the language badge can sit top-right */}
+            <div style={{ ...editorContainerStyle, position: "relative" }}>
+                {/* language badge top-right inside editor */}
+                {language && (
+                    <select
+                        value={language}
+                        onChange={(e) => changeLanguage(e.target.value)}
+                        style={languageDropdownStyle}
+                    >
+                        {LANGUAGES.map(lang => (
+                            <option key={lang.id} value={lang.id}>
+                                {lang.label}
+                            </option>
+                        ))}
+                    </select>
+                )}
+
+                <textarea
                     value={content}
-                    onChange={handleChange}
-                    onMount={handleEditorMount}
-                    options={{ automaticLayout: true }}
+                    onChange={e => handleChange(e.target.value)}
+                    spellCheck={false}
+                    style={textareaStyle}
                 />
             </div>
         </div>
@@ -304,3 +428,131 @@ function cryptoRandomId(): string {
         return Math.random().toString(36).slice(2, 10)
     }
 }
+
+
+const outerContainerStyle: React.CSSProperties = {
+    backgroundColor: "#0f1724",
+    color: "#d4d4d4",
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    fontFamily:
+        "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace",
+    boxSizing: "border-box",
+}
+
+const headerStyle: React.CSSProperties = {
+    display: "flex",
+    gap: 12,
+    alignItems: "center",
+    padding: "12px 18px",
+    borderBottom: "1px solid rgba(255,255,255,0.04)",
+    background: "linear-gradient(180deg, rgba(14,30,54,0.9), rgba(20,34,60,0.9))",
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+}
+
+const logoStyle: React.CSSProperties = {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    background: "linear-gradient(135deg,#0b63a6,#005a99)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
+    flexShrink: 0,
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: 16,
+}
+
+/* create-like button style (matches NewDocumentView Create) */
+const createLikeButtonStyle: React.CSSProperties = {
+    padding: "0.55rem 0.9rem",
+    fontSize: 13,
+    background: "linear-gradient(180deg,#007acc,#005a99)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    boxShadow: "0 6px 18px rgba(0,90,153,0.18)",
+}
+
+/* language badge inside editor (top-right) */
+const languageBadgeStyle: React.CSSProperties = {
+    position: "absolute",
+    right: 20,
+    top: 18,
+    background: "rgba(255,255,255,0.04)",
+    color: "#9fb8d6",
+    padding: "6px 10px",
+    borderRadius: 8,
+    fontSize: 12,
+    boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+    pointerEvents: "none",
+}
+
+/* center card for loading/error states */
+const centerCardStyle: React.CSSProperties = {
+    margin: "48px auto",
+    padding: 18,
+    maxWidth: 820,
+    textAlign: "center",
+    color: "#9fb8d6",
+}
+
+const editorContainerStyle: React.CSSProperties = {
+    flex: 1,              // grow to fill remaining space
+    minHeight: 0,         // allow flexbox to calculate height correctly
+    display: "flex",
+    padding: 18,
+    boxSizing: "border-box",
+}
+
+const textareaStyle: React.CSSProperties = {
+    flex: 1,              // instead of width/height 100%
+    resize: "none",
+    border: "none",
+    outline: "none",
+    backgroundColor: "#071025",
+    color: "#e6eef6",
+    padding: "1rem",
+    borderRadius: 8,
+    fontFamily:
+        "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace",
+    fontSize: 14,
+    lineHeight: 1.45,
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
+}
+
+const shareButtonStyle: React.CSSProperties = {
+    padding: "0.55rem 0.9rem",
+    fontSize: 13,
+    background: "linear-gradient(180deg,#007acc,#005a99)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    boxShadow: "0 6px 18px rgba(0,90,153,0.18)",
+    transition: "transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease",
+    WebkitTapHighlightColor: "transparent",
+}
+
+const languageDropdownStyle: React.CSSProperties = {
+    position: "absolute",
+    right: 20,
+    top: 18,
+    background: "rgba(255,255,255,0.04)",
+    color: "#9fb8d6",           // slightly faded text
+    padding: "6px 10px",
+    borderRadius: 8,
+    fontSize: 12,
+    border: "none",
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+    appearance: "none",
+    fontFamily: "'Cascadia Code', monospace",  // match editor font
+};
+

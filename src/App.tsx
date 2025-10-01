@@ -9,6 +9,7 @@ const LANGUAGES = [
     { id: 'typescript', label: 'TypeScript' },
     { id: 'json', label: 'JSON' },
     { id: 'python', label: 'Python' },
+    { id: 'text', label: 'Text' }
 ]
 
 export default function App() {
