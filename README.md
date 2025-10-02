@@ -5,7 +5,6 @@ This is a minimal React + Vite + TypeScript frontend for a collaborative code ed
 Assumptions
 - Backend HTTP API base is provided in `VITE_BACKEND_HTTP` (see `.env.example`).
 - Backend WebSocket endpoint is `VITE_BACKEND_WS`.
-- Backend provides REST endpoints: GET /documents, POST /documents, GET /documents/:id, DELETE /documents/:id
 - WebSocket messages are simple JSON patches with shape: { type: 'update', id, content }
 
 Run locally
