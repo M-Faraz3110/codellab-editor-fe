@@ -2,10 +2,12 @@
 
 This is a minimal React + Vite + TypeScript frontend for a collaborative code editor. It uses Monaco Editor and connects to a backend over REST and WebSocket for collaborative editing.
 
-Assumptions
-- Backend HTTP API base is provided in `VITE_BACKEND_HTTP` (see `.env.example`).
-- Backend WebSocket endpoint is `VITE_BACKEND_WS`.
-- WebSocket messages are simple JSON patches with shape: { type: 'update', id, content }
+TBA:
+- Sync icons/status
+- Usernames
+- Current users on doc
+- UI improvements in general
+- WS reconnects
 
 Run locally
 
