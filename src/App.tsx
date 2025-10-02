@@ -68,9 +68,9 @@ export default function App() {
         }
     }
 
-    useEffect(() => {
-        fetchDocs()
-    }, [])
+    // useEffect(() => {
+    //     fetchDocs()
+    // }, [])
 
     async function fetchDocs() {
         const data = await listDocuments()
