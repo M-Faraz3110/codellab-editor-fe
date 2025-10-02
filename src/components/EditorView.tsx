@@ -184,10 +184,10 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         }, 5000) // every ~5s of idle time
     )
 
-    function handleTitleChange(title: string) {
-        setTitle(title)
-        sendMetadataUpdate.current(language, title)
-    }
+    // function handleTitleChange(title: string) {
+    //     setTitle(title)
+    //     sendMetadataUpdate.current(language, title)
+    // }
 
     function applyOperation(doc: string, op: Operation): string {
         switch (op.type) {
@@ -214,13 +214,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                 return doc;
         }
     }
-
-
-    // function flushChanges() {
-    //     console.log("IN FLUSHER")
-    //     sendDocUpdate
-    // }
-
 
     function handleChange(value?: string) {
         console.log("HANDLING CHANGE")
@@ -266,7 +259,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         }
         // also send the content as a document_update after debounce (so backend can persist snapshot)
         debouncedFormat()
-        sendSnapshotUpdate.current() // content already being sent via operations; optional snapshot
+        sendSnapshotUpdate.current() // this syncs up the db 
     }
 
     function handleEditorMount(editor: EditorInstance, monaco: Monaco): void {
@@ -321,7 +314,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                         <div style={logoStyle}>CL</div>
                         <div>
-                            <div style={{ color: "#61dafb", fontSize: 20, fontWeight: 700 }}>Codellab</div>
+                            <div style={{ color: "#61dafb", fontSize: 20, fontWeight: 700 }}>[PLACEHOLDER]</div>
                             <div style={{ color: "#9cdcfe", fontSize: 12 }}>{language ?? "loading…"}</div>
                         </div>
                     </div>

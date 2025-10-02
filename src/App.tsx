@@ -20,7 +20,7 @@ export default function App() {
     const [showCreate, setShowCreate] = useState(false)
     const [newTitle, setNewTitle] = useState('Untitled')
     const [newLang, setNewLang] = useState('javascript')
-    const [activeDoc, setActiveDoc] = useState<any | null>(null)
+    //const [activeDoc, setActiveDoc] = useState<any | null>(null)
     const url = new URL(window.location.href)
     const idFromUrl = url.searchParams.get('id')
 
@@ -43,30 +43,30 @@ export default function App() {
         window.history.replaceState(null, '', url.toString())
     }
 
-    async function handleShare() {
-        if (!activeDoc) return
-        const url = window.location.href // already contains ?id=...
-        // prefer Web Share API when available (mobile)
-        if ((navigator as any).share) {
-            try {
-                await (navigator as any).share({ title: activeDoc.title || 'Code document', url })
-                return
-            } catch (err) {
-                // fallthrough to clipboard method on failure
-                console.warn('Web share failed, copying to clipboard', err)
-            }
-        }
+    // async function handleShare() {
+    //     if (!activeDoc) return
+    //     const url = window.location.href // already contains ?id=...
+    //     // prefer Web Share API when available (mobile)
+    //     if ((navigator as any).share) {
+    //         try {
+    //             await (navigator as any).share({ title: activeDoc.title || 'Code document', url })
+    //             return
+    //         } catch (err) {
+    //             // fallthrough to clipboard method on failure
+    //             console.warn('Web share failed, copying to clipboard', err)
+    //         }
+    //     }
 
-        // fallback: copy link to clipboard
-        try {
-            await navigator.clipboard.writeText(url)
-            // simple user feedback — replace with your toast if you have one
-            alert('Document link copied to clipboard!')
-        } catch (err) {
-            console.error('Clipboard write failed', err)
-            alert('Unable to copy link automatically. Please copy the URL from your address bar.')
-        }
-    }
+    //     // fallback: copy link to clipboard
+    //     try {
+    //         await navigator.clipboard.writeText(url)
+    //         // simple user feedback — replace with your toast if you have one
+    //         alert('Document link copied to clipboard!')
+    //     } catch (err) {
+    //         console.error('Clipboard write failed', err)
+    //         alert('Unable to copy link automatically. Please copy the URL from your address bar.')
+    //     }
+    // }
 
     // useEffect(() => {
     //     fetchDocs()
@@ -103,18 +103,18 @@ export default function App() {
         }
     }
 
-    async function handleDelete(id: string) {
-        await deleteDocument(id)
-        if (activeId === id) setActiveId(null)
-        await fetchDocs()
-    }
+    // async function handleDelete(id: string) {
+    //     await deleteDocument(id)
+    //     if (activeId === id) setActiveId(null)
+    //     await fetchDocs()
+    // }
 
-    function handleOpen(id: string) {
-        const doc = docs.find(d => d.id === id)
-        console.log("current active id: " + id)
-        setActiveId(id)
-        setActiveLanguage(doc?.language)
-    }
+    // function handleOpen(id: string) {
+    //     const doc = docs.find(d => d.id === id)
+    //     console.log("current active id: " + id)
+    //     setActiveId(id)
+    //     setActiveLanguage(doc?.language)
+    // }
 
     // If there’s an id in the URL, show editor; otherwise show creation form
     if (idFromUrl) {
