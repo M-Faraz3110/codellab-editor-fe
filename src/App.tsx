@@ -3,6 +3,7 @@ import { listDocuments, createDocument, deleteDocument, getDocument } from './se
 import DocumentList from './components/DocumentList'
 import EditorView from './components/EditorView'
 import { NewDocumentView } from './components/NewDocumentView'
+import { Document } from './types'
 
 const LANGUAGES = [
     { id: 'javascript', label: 'JavaScript' },
@@ -76,7 +77,7 @@ export default function App() {
         setDocs(data || [])
     }
 
-    async function handleCreate() {
+    async function handleCreate(doc: Document) {
         // Optimistic UI: insert a temporary doc immediately so the user sees it.
         const tempId = `temp-${Date.now()}`
         const tempDoc = { id: tempId, title: newTitle, language: newLang }
@@ -87,10 +88,11 @@ export default function App() {
         setShowCreate(false)
 
         try {
-            const doc = await createDocument({ title: newTitle, content: '', language: newLang })
+            //const doc = await createDocument({ title: newTitle, content: '', language: newLang })
             // Replace the temporary doc with the server's returned document
             setDocs(prev => [doc, ...prev.filter(d => d.id !== tempId)])
             setActiveId(doc.id)
+            console.log("doc language " + doc.language)
             setActiveLanguage(doc.language || newLang)
         } catch (err) {
             console.error('Failed to create document:', err)

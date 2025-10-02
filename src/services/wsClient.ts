@@ -49,7 +49,10 @@ class WSClient {
   }
 
   sendDocumentUpdate(id: string, update: { title?: string | null; language?: string | null }): void {
-    this.send({ type: 'document_update', id, update: update })
+    console.log("sending doc update")
+    if (update.title && update.language) {
+      this.send({ type: 'document_update', id, title: update.title, language: update.language })
+    }
   }
 
   sendSnapshotUpdate(id: string, update: { content?: string | null }): void {

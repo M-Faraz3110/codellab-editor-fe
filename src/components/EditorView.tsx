@@ -86,8 +86,8 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     if (typeof msg.title === "string") {
                         setTitle(msg.title);
                     }
-                    if (typeof msg.language === "string") {
-                        console.log("change lang")
+                    if (typeof msg.language === "string" && msg.language != "") {
+                        console.log("change lang" + msg.language)
                         setLanguage(msg.language);
                     }
 
@@ -383,6 +383,13 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             {/* Editor area: position:relative so the language badge can sit top-right */}
             <div style={{ ...editorContainerStyle, position: "relative" }}>
                 {/* language badge top-right inside editor */}
+                <textarea
+                    value={content}
+                    onChange={e => handleChange(e.target.value)}
+                    spellCheck={false}
+                    style={textareaStyle}
+                />
+
                 {language && (
                     <select
                         value={language}
@@ -396,13 +403,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                         ))}
                     </select>
                 )}
-
-                <textarea
-                    value={content}
-                    onChange={e => handleChange(e.target.value)}
-                    spellCheck={false}
-                    style={textareaStyle}
-                />
             </div>
         </div>
     )
@@ -545,7 +545,7 @@ const languageDropdownStyle: React.CSSProperties = {
     right: 20,
     top: 18,
     background: "rgba(255,255,255,0.04)",
-    color: "#9fb8d6",           // slightly faded text
+    color: "#9fb8d6",
     padding: "6px 10px",
     borderRadius: 8,
     fontSize: 12,
@@ -553,6 +553,9 @@ const languageDropdownStyle: React.CSSProperties = {
     cursor: "pointer",
     boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
     appearance: "none",
-    fontFamily: "'Cascadia Code', monospace",  // match editor font
+    fontFamily: "'Cascadia Code', monospace",
+    zIndex: 1000,
+    pointerEvents: "auto"
 };
+
 

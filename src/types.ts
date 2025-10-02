@@ -11,10 +11,20 @@ export type Operation = {
   timestamp: number
 }
 
+export type Document = {
+  id: string
+  title: string
+  content: string
+  language: string
+  created_at: Date
+  updated_at: Date
+  version: number
+}
+
 // WebSocket envelope we send/receive
 export type WSMessage =
   | { type: 'operation'; id: string; operation: Operation }
-  | { type: 'document_update'; id: string; update: DocumentUpdate }
+  | { type: 'document_update'; id: string; title: string | null, language: string | null }
   | { type: 'snapshot'; id: string; content: string; title?: string; language?: string}
 
 export type DocumentUpdate = {

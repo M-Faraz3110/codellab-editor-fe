@@ -1,7 +1,8 @@
 import React, { useState } from "react"
 import { createDocument } from "../services/api"
+import { Document } from "../types"
 
-export function NewDocumentView({ onCreated }: { onCreated: (doc: any) => void }) {
+export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => void }) {
     const [title, setTitle] = useState("")
     const [language, setLanguage] = useState("javascript")
     const [error, setError] = useState<string | null>(null)
@@ -11,6 +12,7 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: any) => void }
         e.preventDefault()
         setCreating(true)
         try {
+            console.log("language " + language)
             const doc = await createDocument({ title, language, content: "" })
             const url = new URL(window.location.href)
             url.searchParams.set("id", doc.id)
