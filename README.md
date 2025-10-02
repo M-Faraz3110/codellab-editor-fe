@@ -14,3 +14,5 @@ Run locally
 3. npm run dev
 
 Open http://localhost:5173
+
+Deployed on Vercel for now: https://codellab-editor-nggklgdhr-farazs-projects-f2fc8a60.vercel.app
