@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import Editor, { Monaco } from '@monaco-editor/react'
 import type * as MonacoEditor from 'monaco-editor'
 import type * as monaco from "monaco-editor"
@@ -31,9 +31,12 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
 
     const [loading, setLoading] = useState<boolean>(true)
     const [connected, setConnected] = useState<boolean>(false)
+    const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
+    const [isContentSynced, setIsContentSynced] = useState<boolean>(true)
 
     const [username, setUsername] = useState("");
     const [modalOpen, setModalOpen] = useState(true);
+    const [showCopySuccess, setShowCopySuccess] = useState(false);
     const [users, setUsers] = useState<PresenceUser[]>([]);
     const [meId, setMeId] = useState<string>('');
     const decorationsRef = useRef<Record<string, string[]>>({});
@@ -55,6 +58,37 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     useEffect(() => {
         contentRef.current = content; // keep ref in sync
     }, [content]);
+
+    // Set up interval for sending snapshots every 5 seconds
+    useEffect(() => {
+        // Don't start interval until we're connected and have a username
+        if (!connected || !username) return;
+
+        console.log('Setting up snapshot interval');
+        let snapshotCount = 0;
+
+        const intervalId = setInterval(() => {
+            snapshotCount++;
+            const formattedUsers = users.map(user => ({
+                id: user.id,
+                username: user.username
+            }));
+            console.log(`Sending snapshot #${snapshotCount} with content length:`, contentRef.current.length);
+            console.log('Current users:', formattedUsers);
+            wsRef.current?.sendSnapshotUpdate(id, {
+                content: contentRef.current,
+                users: formattedUsers
+            });
+            setLastSyncTime(Date.now());
+            setIsContentSynced(true);
+        }, 5000);
+
+        // Clean up interval on unmount or when connection/username changes
+        return () => {
+            console.log('Cleaning up snapshot interval');
+            clearInterval(intervalId);
+        };
+    }, [connected, username, id, users]); // Recreate interval if these change
 
     // Debug users state changes
     useEffect(() => {
@@ -234,21 +268,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             }
         };
 
-        // // Attach onOpen handler — send init handshake after component is ready
-        // ws.onOpen = () => {
-        //     setConnected(true)
-        //     console.log("WS open — sending init handshake");
-
-        //     // Delay zero to let React fully wire state/handlers
-        //     setTimeout(() => {
-        //         ws.sendReady({
-        //             type: "init",
-        //             id: meId,
-        //             username: username
-        //         });
-        //     }, 0);
-        // };
-
         // Attach onClose/error handlers for debugging
         ws.onClose = (ev: CloseEvent) => console.log("WS closed", ev.code, ev.reason);
         ws.onError = (ev: Event) => console.log("WS error", ev);
@@ -386,25 +405,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     }, [users, meId]);
 
 
-
-    // // When the language state changes and Monaco has mounted, apply the language to the model.
-    // useEffect(() => {
-    //     const monaco = monacoRef.current
-    //     const editor = editorRef.current
-    //     if (!monaco || !editor) return
-    //     const model = editor.getModel() as MonacoEditor.editor.ITextModel | null
-    //     if (model) monaco.editor.setModelLanguage(model, language)
-    // }, [language, monacoRef.current, editorRef.current])
-
-    // // Debounced sender for document metadata updates
-    // const sendDocUpdate = useRef(
-    //     debounce((lang?: string | null, titleVal?: string | null) => {
-    //         const ws = wsRef.current
-    //         if (!ws) return
-    //         ws.sendDocumentUpdate(id, { language: lang ?? null, title: titleVal ?? null })
-    //     }, 300)
-    // )
-
     // For metadata (title/lang) updates
     const sendMetadataUpdate = useRef(
         debounce((lang?: string | null, titleVal?: string | null) => {
@@ -416,21 +416,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             })
         }, 300)
     )
-
-    // For snapshot persistence (full document save)
-    const sendSnapshotUpdate = useRef(
-        debounce(() => {
-            wsRef.current?.sendSnapshotUpdate(id, {
-                content: contentRef.current,
-
-            })
-        }, 5000) // every ~5s of idle time
-    )
-
-    // function handleTitleChange(title: string) {
-    //     setTitle(title)
-    //     sendMetadataUpdate.current(language, title)
-    // }
 
     function applyOperation(doc: string, op: Operation): string {
         switch (op.type) {
@@ -463,12 +448,22 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
-    // deterministic pastel-ish color from string
+    // Generate a highly unique color from string
     function colorFromString(s: string) {
-        let h = 0;
-        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-        const hue = Math.abs(h) % 360;
-        return `hsl(${hue} 70% 60%)`;
+        // Use different parts of string for different components
+        let h1 = 0, h2 = 0;
+        for (let i = 0; i < s.length; i++) {
+            const char = s.charCodeAt(i);
+            h1 = (h1 * 37 + char) | 0;  // Use 37 for hue
+            h2 = (h2 * 23 + char) | 0;  // Use 23 for saturation/lightness
+        }
+
+        // Generate color components with good range and variation
+        const hue = Math.abs(h1) % 360;  // Full hue range
+        const sat = 65 + (Math.abs(h2) % 20);  // Saturation between 65-85%
+        const light = 45 + (Math.abs(h1 + h2) % 20);  // Lightness between 45-65%
+
+        return `hsl(${hue} ${sat}% ${light}%)`;
     }
 
     function ensureCursorStyleForUser(userId: string, color: string) {
@@ -490,9 +485,11 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
 
     function handleChange(value?: string) {
         console.log("HANDLING CHANGE")
+        console.log("Current users state in handleChange:", users)
         const newContent = value || ''
         const oldContent = content
         setContent(newContent)
+        setIsContentSynced(false)
         console.log(content)
 
         // compute diffs using local simpleDiff and emit Operation messages
@@ -530,19 +527,10 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                 continue
             }
         }
-        // also send the content as a document_update after debounce (so backend can persist snapshot)
+        // Format if needed
         debouncedFormat()
-        sendSnapshotUpdate.current() // this syncs up the db 
     }
 
-    // function handleEditorMount(editor: EditorInstance, monaco: Monaco): void {
-    //     console.log("editor mount")
-    //     //flushChanges()
-    //     editorRef.current = editor
-    //     monacoRef.current = monaco
-    //     const model = editor.getModel() as MonacoEditor.editor.ITextModel | null
-    //     if (model) monaco.editor.setModelLanguage(model, language)
-    // }
 
     function changeLanguage(lang: string): void {
         setLanguage(lang)
@@ -560,19 +548,12 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         const url = new URL(window.location.href)
         url.searchParams.set("id", id)
         const href = url.toString()
-        // if ((navigator as any).share) {
-        //     try {
-        //         await (navigator as any).share({ title: title ?? "Code document", url: href })
-        //         return
-        //     } catch (err) {
-        //         // fall back to clipboard
-        //     }
-        // }
+        setShowCopySuccess(true);
+        setTimeout(() => setShowCopySuccess(false), 2000); // Reset after 2 seconds
         try {
             await navigator.clipboard.writeText(href)
             // small visual feedback
             // you may replace alert with your toast if you have one
-            alert("Link copied to clipboard!")
         } catch (err) {
             // fallback: show URL in prompt for manual copy
             // eslint-disable-next-line no-alert
@@ -690,6 +671,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         if (e) e.preventDefault();
         const trimmed = username.trim();
         if (!trimmed) return;
+        console.log("Submitting username. Current users:", users);
 
         setUsers(prev => {
             if (prev.find(u => u.id === meId)) return prev;
@@ -721,11 +703,68 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                         </div>
 
                         {/* right side: connection status + sleek share button */}
-                        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
-                            <div style={{ color: connected ? "#9fe0a6" : "#f6c85f", fontSize: 13 }}>
-                                {connected ? "connected" : "connecting..."}
+                        <div style={{ marginLeft: "auto", display: "flex", gap: 32, alignItems: "center" }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+                                <div style={{ color: connected ? "#9fe0a6" : "#f6c85f", fontSize: 13 }}>
+                                    {connected ? "connected" : "connecting..."}
+                                </div>
+                                {connected && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 13 }}>
+                                        {isContentSynced ? (
+                                            <>
+                                                <span style={{ color: '#9fe0a6' }}>✓ synced</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span style={{ color: '#f6c85f', display: 'inline-flex', animation: 'spin 1s linear infinite' }}>↻</span>
+                                                <style>{`
+                                                    @keyframes spin {
+                                                        from { transform: rotate(0deg); }
+                                                        to { transform: rotate(360deg); }
+                                                    }
+                                                `}</style>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                            <button onClick={handleShare} style={createLikeButtonStyle}>Share</button>
+                            <button
+                                onClick={handleShare}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    padding: '4px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '4px',
+                                    color: '#cccccc',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                <div style={{
+                                    width: '16px',
+                                    height: '16px',
+                                    color: showCopySuccess ? '#73c991' : '#cccccc',
+                                    transition: 'color 0.2s'
+                                }}>
+                                    {showCopySuccess ? (
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M13.3333 4L6 11.3333L2.66667 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M3.33333 8V12.6667C3.33333 13.403 3.93 14 4.66667 14H11.3333C12.07 14 12.6667 13.403 12.6667 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                            <path d="M8 2V10M8 2L5.33333 4.66667M8 2L10.6667 4.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    )}
+                                </div>
+                            </button>
                         </div>
                     </div>
 
@@ -769,7 +808,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                         )}
                     </div>
                 </div>
-                {/* Users Sidebar */}
                 <div style={sidebarStyle}>
                     <div style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                         <h3 style={{ margin: 0, color: '#61dafb', fontSize: '14px' }}>Active Users</h3>
@@ -919,6 +957,20 @@ const textareaStyle: React.CSSProperties = {
     lineHeight: 1.45,
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
 }
+
+const vscodeButtonStyle: React.CSSProperties = {
+    background: '#2d2d2d',
+    border: '1px solid #3d3d3d',
+    borderRadius: '3px',
+    color: '#cccccc',
+    fontSize: '12px',
+    padding: '4px 8px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    transition: 'background-color 0.1s'
+};
 
 const shareButtonStyle: React.CSSProperties = {
     padding: "0.55rem 0.9rem",

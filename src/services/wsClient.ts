@@ -85,7 +85,9 @@ class WSClient {
     });
   }
 
-  sendSnapshotUpdate(id: string, update: { content?: string | null, users?: Array<{ id: string; username: string }> } ): void {
+  sendSnapshotUpdate(id: string, update: { content?: string | null, users?: Array<{ id: string; username: string }> }): void {
+    console.log("sending snapshot")
+    console.log(update.users)
     if (update.content && update.users) {
       this.send({ type: 'snapshot', id, content: update.content, users: update.users })
     }

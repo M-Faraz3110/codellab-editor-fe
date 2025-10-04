@@ -3,9 +3,9 @@
 This is a minimal React + Vite + TypeScript frontend for a collaborative code editor. It uses Monaco Editor and connects to a backend over REST and WebSocket for collaborative editing.
 
 TBA:
-- Sync icons/status
-- Usernames
-- Current users on doc
+- [x] ~~Sync icons/status~~
+- [x] ~~Usernames~~
+- [x] ~~Current users on doc~~
 - UI improvements in general
 - WS reconnects
 
