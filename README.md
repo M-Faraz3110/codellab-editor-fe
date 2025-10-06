@@ -6,8 +6,10 @@ TBA:
 - [x] ~~Sync icons/status~~
 - [x] ~~Usernames~~
 - [x] ~~Current users on doc~~
-- UI improvements in general
-- WS reconnects
+- [ ] Dark/Light Mode
+- [ ] Run Code (WebAssembly?)
+- [ ] UI improvements in general
+- [ ] WS reconnects
 
 Run locally
 

@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import Editor, { Monaco } from '@monaco-editor/react'
+import { Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, FormControl, FormLabel, Text, Input, Card, CardHeader, CardBody, Heading, Divider, Stack, Box } from "@chakra-ui/react"
+import { Button } from "./ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import type * as MonacoEditor from 'monaco-editor'
 import type * as monaco from "monaco-editor"
 import { getDocument } from '../services/api'
@@ -7,13 +10,17 @@ import type { Operation, PresenceUser, WSMessage } from '../types'
 import { simpleDiff } from '../utils/diff'
 import { Console } from 'console'
 import getGlobalWS from '../services/wsClient'
+import { Label } from './ui/label';
+import { relative } from 'path';
+import PixelBlast from './ui/PixelBlast';
+import Dither from './ui/Dither';
 
 const LANGUAGES = [
-    { id: 'javascript', label: 'JavaScript' },
-    { id: 'typescript', label: 'TypeScript' },
-    { id: 'json', label: 'JSON' },
-    { id: 'python', label: 'Python' },
-    { id: 'text', label: 'Text' }
+    { id: '.js', label: '.js' },
+    { id: '.ts', label: '.ts' },
+    { id: '.json', label: '.json' },
+    { id: '.py', label: '.py' },
+    { id: '.txt', label: '.txt' }
 ]
 
 function debounce<T extends (...args: any[]) => void>(fn: T, wait = 300) {
@@ -26,7 +33,13 @@ function debounce<T extends (...args: any[]) => void>(fn: T, wait = 300) {
 
 export default function EditorView({ id, initialContent, initialLanguage }: { id: string; initialContent?: string; initialLanguage?: string }) {
     const [content, setContent] = useState<string>('')
-    const [language, setLanguage] = useState<string>(initialLanguage || 'javascript')
+    // Map initialLanguage to a valid id from LANGUAGES
+    const getInitialLangId = () => {
+        if (!initialLanguage) return 'javascript';
+        const found = LANGUAGES.find(l => l.id === initialLanguage || l.label === initialLanguage);
+        return found ? found.id : 'javascript';
+    };
+    const [language, setLanguage] = useState<string>(getInitialLangId());
     const [title, setTitle] = useState<string>('')
 
     const [loading, setLoading] = useState<boolean>(true)
@@ -35,7 +48,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     const [isContentSynced, setIsContentSynced] = useState<boolean>(true)
 
     const [username, setUsername] = useState("");
-    const [modalOpen, setModalOpen] = useState(true);
+    const [showDialog, setShowDialog] = useState(true);
     const [showCopySuccess, setShowCopySuccess] = useState(false);
     const [users, setUsers] = useState<PresenceUser[]>([]);
     const [meId, setMeId] = useState<string>('');
@@ -125,7 +138,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
 
     useEffect(() => {
         // Don't connect until username is set and modal is closed
-        if (modalOpen || !username.trim()) {
+        if (showDialog || !username.trim()) {
             setLoading(false) // Don't show loading when waiting for username
             return;
         }
@@ -290,14 +303,14 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                 wsRef.current = null;
             }
         };
-    }, [id, username, modalOpen]);
+    }, [id, username, showDialog]);
 
 
     useEffect(() => {
         console.log("Setting up cursor position handler", {
             hasEditor: !!editorRef.current,
             hasWS: !!wsRef.current,
-            modalOpen,
+            showDialog,
             hasUsername: !!username
         });
 
@@ -319,7 +332,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             const pos = e.position;
             const currentWS = wsRef.current;  // Get fresh ref value
             // only send if socket exists and username/modal is set
-            if (currentWS && !modalOpen && username) {
+            if (currentWS && !showDialog && username) {
                 console.log("sending presence update", {
                     position: pos,
                     username,
@@ -334,7 +347,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             } else {
                 console.log("Skipping presence update:", {
                     hasWS: !!currentWS,
-                    modalOpen,
+                    showDialog,
                     hasUsername: !!username
                 });
             }
@@ -352,7 +365,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         };
         // Note: Don't put ref.current values in dependencies
         // Instead, respond to the values that might cause refs to change
-    }, [modalOpen, username, meId, id, users]);
+    }, [showDialog, username, meId, id, users]);
 
     // add this useEffect (runs when 'users' changes)
     useEffect(() => {
@@ -562,68 +575,134 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     }
 
     // Show username modal regardless of loading state
-    if (modalOpen) {
+    if (showDialog) {
+        const handleJoin = () => {
+            if (username.trim()) {
+                setShowDialog(false);
+            }
+        };
+
+        const handleUsernameKeyPress = (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' && username.trim()) {
+                handleJoin();
+            }
+        };
+
         return (
-            <div style={outerContainerStyle}>
-                {/* username modal */}
-                <div style={modalOverlayStyle}>
-                    <form
-                        onSubmit={onSubmitUsername}
-                        style={modalFormStyle}
-                        role="dialog"
-                        aria-modal="true"
+            <Modal
+                isOpen={showDialog}
+                onClose={() => setShowDialog(false)}
+                closeOnOverlayClick={false}
+                closeOnEsc={false}
+                isCentered
+            >
+                <ModalOverlay
+                    bg="rgba(0, 0, 0, 0.6)"
+                    backdropFilter="blur(4px)"
+                />
+                <ModalContent
+                    bg="black"
+                    border="1px solid rgba(255, 255, 255, 0.1)"
+                    boxShadow="0 8px 32px rgba(0, 0, 0, 0.4)"
+                    maxW="450px"
+                    mx={4}
+                >
+                    <ModalHeader
+                        color="white"
+                        fontSize="lg"
+                        fontWeight="600"
+                        pb={2}
+                        fontFamily="'Cascadia Code', monospace"
                     >
-                        <h2 style={{ color: '#61dafb', fontSize: '20px', marginTop: 0, marginBottom: '8px' }}>
-                            Enter a username
-                        </h2>
-                        <p style={{ color: '#9fb8d6', fontSize: '13px', marginBottom: '16px', lineHeight: 1.5 }}>
-                            Choose a name other people will see in the collaboration session
-                        </p>
-                        <label style={{ display: 'block' }}>
-                            <input
-                                autoFocus
+                        Join Collaboration
+                    </ModalHeader>
+
+                    <ModalBody
+                        pb={6}
+                        px={6}
+                    >
+                        <Text
+                            color="rgba(255, 255, 255, 0.7)"
+                            fontSize="sm"
+                            mb={4}
+                            fontFamily="'Cascadia Code', monospace"
+                        >
+                            Enter your username to join the coding session
+                        </Text>
+
+                        <FormControl>
+                            <Input
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                style={modalInputStyle}
-                                placeholder="Your display name"
+                                onKeyDown={handleUsernameKeyPress}
+                                placeholder="Enter username"
+                                bgColor="#1e1e2f"
+                                borderColor="#3c3c5c"
+                                color="whiteAlpha.900"
+                                borderRadius="full"
+                                _placeholder={{
+                                    color: "gray.500"
+                                }}
+                                _focus={{
+                                    borderColor: "#007acc",
+                                    boxShadow: "0 0 0 1px #007acc"
+                                }}
+                                fontFamily="'Cascadia Code', monospace"
+                                width="100%"
+                                maxWidth="100%"
+                                boxSizing="border-box"
+                                autoFocus
                             />
-                        </label>
+                        </FormControl>
+                    </ModalBody>
 
-                        <div style={{ marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                            <button
-                                type="button"
-                                style={modalCancelButtonStyle}
-                                onClick={() => {
-                                    window.location.href = '/';
-                                }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={!username.trim()}
-                                style={{
-                                    ...modalJoinButtonStyle,
-                                    opacity: username.trim() ? 1 : 0.5,
-                                    cursor: username.trim() ? 'pointer' : 'not-allowed'
-                                }}
-                            >
-                                Join Session
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+                    <ModalFooter
+                        pt={0}
+                        px={6}
+                        pb={6}
+                        display="flex"
+                        justifyContent="flex-end"
+                        gap={3}
+                    >
+                        <Button
+                            onClick={handleJoin}
+                            disabled={!username.trim()}
+                            size="sm"
+                            className={`${username.trim()
+                                ? 'min-w-[120px] p-3 rounded-full bg-black/80 backdrop-blur border-2 border-white/20 flex items-center justify-center relative overflow-hidden shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all duration-300 ease-in-out hover:scale-105 hover:border-white/40 hover:shadow-[0_0_30px_rgba(255,255,255,0.2),inset_0_0_20px_rgba(255,255,255,0.2)] hover:bg-white/10 active:scale-95 active:shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:brightness-125'
+                                : 'min-w-[120px] p-3 rounded-full bg-black/60 backdrop-blur border-2 border-white/10 flex items-center justify-center relative overflow-hidden opacity-50 cursor-not-allowed'
+                                }`}
+                            style={{
+                                background: username.trim() ? 'rgba(0, 0, 0, 0.65)' : 'rgba(0, 0, 0, 0.4)',
+                                backdropFilter: 'blur(10px)',
+                                padding: '0.75rem 1.5rem',
+                                borderRadius: '9999px',
+                                transition: 'all 0.3s ease',
+                                minWidth: '120px',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                boxShadow: username.trim() ? '0 0 15px rgba(255, 255, 255, 0.1), inset 0 0 15px rgba(255, 255, 255, 0.1)' : '0 0 5px rgba(255, 255, 255, 0.05)',
+                                border: username.trim() ? '2px solid rgba(255, 255, 255, 0.2)' : '2px solid rgba(255, 255, 255, 0.1)',
+                                color: 'white',
+                                fontFamily: "'Cascadia Code', monospace",
+                                fontSize: '14px'
+                            }}
+                        >
+                            Join Session
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
         );
-    }
-
-    // Show loading state only after username is set
+    }    // Show loading state only after username is set
     if (loading) {
         return (
             <div style={outerContainerStyle}>
                 <div style={headerStyle}>
                     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <div style={logoStyle}>CL</div>
                         <div>
                             <div style={{ color: "#61dafb", fontSize: 20, fontWeight: 700 }}>[PLACEHOLDER]</div>
                             <div style={{ color: "#9cdcfe", fontSize: 12 }}>{language ?? "loading…"}</div>
@@ -631,10 +710,10 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     </div>
 
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <div style={{ color: connected ? "#9fe0a6" : "#f6c85f", fontSize: 13 }}>
+                        <div style={{ color: connected ? "#27e07a" : "#f6c85f", fontWeight: 700, fontSize: 13 }}>
                             {connected ? "connected" : "connecting..."}
                         </div>
-                        <button onClick={handleShare} style={shareButtonStyle}>Share</button>
+                        <Button onClick={handleShare} variant="outline" className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">Share</Button>
                     </div>
                 </div>
 
@@ -687,63 +766,88 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         });
 
         setUsername(trimmed);
-        setModalOpen(false);
+        setShowDialog(false);
     }
 
     return (
+
         <div style={outerContainerStyle}>
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {/* Centered page title at the top */}
+            <div style={{ width: '100%', textAlign: 'center', marginTop: '24px', marginBottom: '12px' }}>
+                <span
+                    style={{
+                        fontFamily: 'Inter, Helvetica, Arial, sans-serif',
+                        fontWeight: 'bold',
+                        fontSize: '32px',
+                        color: '#fff',
+                        textShadow: "0 0 20px rgba(255,255,255,0.2)",
+                        letterSpacing: '-0.02em',
+                        transition: 'text-shadow 0.3s',
+                    }}
+                >
+                    [PLACEHOLDER]
+                </span>
+            </div>
+            <div style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 0,
+            }}>
+                {/* <Dither
+                    waveColor={[0.3, 0.4, 0.8]}
+                    disableAnimation={false}
+                    enableMouseInteraction={false}
+                    colorNum={4}
+                    waveAmplitude={0.0}
+                    waveFrequency={0.5}
+                    waveSpeed={0.05}
+                    pixelSize={3}
+                /> */}
+            </div>
+
+            <div style={{ display: 'flex', minHeight: 0 }}>
+                <div style={{ flex: '1 1 0', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    {/* Title and controls will be refactored in next step */}
                     <div style={headerStyle}>
-                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                            <div style={logoStyle}>CL</div>
+                        <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
                             <div>
-                                <div style={{ color: "#61dafb", fontSize: 20, fontWeight: 700 }}>{title ?? "Untitled"}</div>
+                                <div style={{ color: "#ffffff", fontSize: 34, fontWeight: 'bold', fontFamily: 'Inter, Helvetica, Arial, sans-serif', }}>{title ? (title + language) : "Untitled"}</div>
                             </div>
                         </div>
-
                         {/* right side: connection status + sleek share button */}
                         <div style={{ marginLeft: "auto", display: "flex", gap: 32, alignItems: "center" }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-                                <div style={{ color: connected ? "#9fe0a6" : "#f6c85f", fontSize: 13 }}>
+                                <div style={{ color: connected ? "#27e07a" : "#f6c85f", fontWeight: 600, fontSize: 13, fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}>
                                     {connected ? "connected" : "connecting..."}
                                 </div>
                                 {connected && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 13 }}>
                                         {isContentSynced ? (
                                             <>
-                                                <span style={{ color: '#9fe0a6' }}>✓ synced</span>
+                                                <span style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 600 }}>✓ synced</span>
                                             </>
                                         ) : (
                                             <>
                                                 <span style={{ color: '#f6c85f', display: 'inline-flex', animation: 'spin 1s linear infinite' }}>↻</span>
                                                 <style>{`
-                                                    @keyframes spin {
-                                                        from { transform: rotate(0deg); }
-                                                        to { transform: rotate(360deg); }
-                                                    }
-                                                `}</style>
+                                                            @keyframes spin {
+                                                                from { transform: rotate(0deg); }
+                                                                to { transform: rotate(360deg); }
+                                                            }
+                                                        `}</style>
                                             </>
                                         )}
                                     </div>
                                 )}
                             </div>
-                            <button
+                            <Button
                                 onClick={handleShare}
-                                style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    padding: '4px',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: '28px',
-                                    height: '28px',
-                                    borderRadius: '4px',
-                                    color: '#cccccc',
-                                    transition: 'all 0.2s'
-                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="p-1 h-auto w-7 hover:bg-white/10 text-[#cccccc] transition-all duration-200"
                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                             >
@@ -764,77 +868,129 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                                         </svg>
                                     )}
                                 </div>
-                            </button>
+                            </Button>
                         </div>
-                    </div>
-
-                    {/* Editor area: position:relative so the language badge can sit top-right */}
-                    <div style={{ ...editorContainerStyle, position: "relative" }}>
-                        <Editor
-                            height="100%"
-                            theme="vs-dark"
-                            language={language}
-                            value={content}
-                            onChange={handleChange}
-                            onMount={(editor, monaco) => {
-                                console.log("editor mount");
-                                editorRef.current = editor;
-                                monacoRef.current = monaco;
-                                const model = editor.getModel();
-                                if (model) monaco.editor.setModelLanguage(model, language);
-                            }}
-                            options={{
-                                minimap: { enabled: false },
-                                fontSize: 14,
-                                lineNumbers: 'on',
-                                roundedSelection: false,
-                                scrollBeyondLastLine: false,
-                                readOnly: false,
-                                theme: 'vs-dark'
-                            }}
-                        />
-                        {language && (
-                            <select
-                                value={language}
-                                onChange={(e) => changeLanguage(e.target.value)}
-                                style={languageDropdownStyle}
-                            >
-                                {LANGUAGES.map(lang => (
-                                    <option key={lang.id} value={lang.id}>
-                                        {lang.label}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
-                </div>
-                <div style={sidebarStyle}>
-                    <div style={{ padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <h3 style={{ margin: 0, color: '#61dafb', fontSize: '14px' }}>Active Users</h3>
-                    </div>
-                    <div style={{ padding: '12px' }}>
-                        {users.map(user => (
-                            <div key={user.id} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '8px',
-                                borderRadius: '6px',
-                                backgroundColor: user.id === meId ? 'rgba(97, 218, 251, 0.1)' : 'transparent'
-                            }}>
-                                <div style={{
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '50%',
-                                    backgroundColor: user.color || colorFromString(user.id)
-                                }} />
-                                <span style={{ color: '#d4d4d4', fontSize: '13px' }}>{user.username}</span>
-                            </div>
-                        ))}
                     </div>
                 </div>
             </div>
+            {/* Editor area: position:relative so the language badge can sit top-right */}
+            <div style={{ ...editorContainerStyle, minHeight: 0, display: 'flex', flex: 1, height: "100%" }}>
+                <div style={{ flex: '1 1 0', minWidth: 0, position: 'relative' }}>
+                    <Editor
+                        height="100%"
+                        theme="vs-dark"
+                        language={language}
+                        value={content}
+                        onChange={handleChange}
+                        onMount={(editor, monaco) => {
+                            console.log("editor mount");
+                            editorRef.current = editor;
+                            monacoRef.current = monaco;
+                            const model = editor.getModel();
+                            if (model) monaco.editor.setModelLanguage(model, language);
+                        }}
+                        options={{
+                            minimap: { enabled: false },
+                            fontSize: 14,
+                            lineNumbers: 'on',
+                            roundedSelection: false,
+                            scrollBeyondLastLine: false,
+                            readOnly: false,
+                            theme: 'vs-dark'
+                        }}
+                    />
+                    {language && (
+                        <select
+                            value={language}
+                            onChange={(e) => changeLanguage(e.target.value)}
+                            style={languageDropdownStyle}
+                        >
+                            {LANGUAGES.map(lang => (
+                                <option key={lang.id} value={lang.id}>
+                                    {lang.label}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
+
+
+                {/* Sidebar Section */}
+                <div style={{
+                    flexBasis: '320px', // preferred width, but flexible
+                    minWidth: '200px',  // minimum width for usability
+                    maxWidth: '400px',  // maximum width for large screens
+                    width: '100%',      // allow it to grow/shrink
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 0,
+                    marginLeft: '2vw',
+                    height: '100%',
+                }}>
+                    <Box display="flex" flexDirection="column" height="100%" minHeight={0}>
+                        {/* Active Users Card fills the rest */}
+                        <Card
+                            flex="1"
+                            bg="#1e1e1e"
+                            border="1px solid"
+                            borderColor="whiteAlpha.200"
+                            borderRadius="16px"
+                            p={3}
+                            w="100%"
+                            display="flex"
+                            flexDirection="column"
+                            minHeight={0}
+                            style={{
+                                backdropFilter: 'blur(10px)',
+                            }}
+                        >
+                            <CardHeader pb={2}>
+                                <Heading
+                                    as="h3"
+                                    size="sm"
+                                    color="white"
+                                    fontWeight={600}
+                                    m={0}
+                                    fontSize="16px"
+                                    style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif', textAlign: 'center', width: '100%' }}
+                                >
+                                    Active Users
+                                </Heading>
+                            </CardHeader>
+                            <Divider borderColor="gray.600" style={{ maxWidth: '80%', margin: '0 auto', backdropFilter: 'blur(10px' }} />
+                            <CardBody pt={3} flex="1" overflowY="auto">
+                                <Stack spacing={2}>
+                                    {users.map(user => (
+                                        <Box
+                                            key={user.id}
+                                            display="flex"
+                                            alignItems="center"
+                                            gap="8px"
+                                            px={2}
+                                            py={1}
+                                            borderRadius="8px"
+                                            bg={user.id === meId ? "whiteAlpha.100" : "transparent"}
+                                        >
+                                            <Box
+                                                w="10px"
+                                                h="10px"
+                                                borderRadius="50%"
+                                                bg={user.color || colorFromString(user.id)}
+                                            />
+                                            <Text color="gray.200" fontSize="16px" style={{ fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 600 }}>
+                                                {user.username}
+                                            </Text>
+                                        </Box>
+                                    ))}
+                                </Stack>
+                            </CardBody>
+                        </Card>
+                    </Box>
+                </div>
+            </div>
         </div>
+
     )
 }
 
@@ -862,7 +1018,7 @@ function cryptoRandomId(): string {
 
 
 const outerContainerStyle: React.CSSProperties = {
-    backgroundColor: "#0f1724",
+    backgroundColor: "#000",
     color: "#d4d4d4",
     minHeight: "100vh",
     display: "flex",
@@ -870,15 +1026,16 @@ const outerContainerStyle: React.CSSProperties = {
     fontFamily:
         "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace",
     boxSizing: "border-box",
+    height: "100%"
 }
 
 const headerStyle: React.CSSProperties = {
     display: "flex",
-    gap: 12,
+    gap: 1,
     alignItems: "center",
-    padding: "12px 18px",
+    padding: "25px 2px 1px 25px",
     borderBottom: "1px solid rgba(255,255,255,0.04)",
-    background: "linear-gradient(180deg, rgba(14,30,54,0.9), rgba(20,34,60,0.9))",
+    background: "transparent",
     position: "sticky",
     top: 0,
     zIndex: 20,
@@ -987,8 +1144,8 @@ const shareButtonStyle: React.CSSProperties = {
 
 const languageDropdownStyle: React.CSSProperties = {
     position: "absolute",
-    right: 20,
-    top: 18,
+    right: 1,
+    top: 1,
     background: "rgba(255,255,255,0.04)",
     color: "#9fb8d6",
     padding: "6px 10px",
@@ -1064,7 +1221,7 @@ const modalJoinButtonStyle: React.CSSProperties = {
 
 const sidebarStyle: React.CSSProperties = {
     width: '240px',
-    backgroundColor: '#0a1019',
+    backgroundColor: '#23272f',
     borderLeft: '1px solid rgba(255,255,255,0.04)',
     display: 'flex',
     flexDirection: 'column',

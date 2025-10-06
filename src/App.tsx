@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { ChakraProvider } from '@chakra-ui/react'
 import { listDocuments, createDocument, deleteDocument, getDocument } from './services/api'
 import DocumentList from './components/DocumentList'
 import EditorView from './components/EditorView'
@@ -14,6 +15,14 @@ const LANGUAGES = [
 ]
 
 export default function App() {
+    return (
+        <ChakraProvider>
+            <AppContent />
+        </ChakraProvider>
+    )
+}
+
+function AppContent() {
     const [docs, setDocs] = useState<Array<{ id: string; title: string; language?: string }>>([])
     const [activeId, setActiveId] = useState<string | null>(null)
     const [activeLanguage, setActiveLanguage] = useState<string | undefined>(undefined)
