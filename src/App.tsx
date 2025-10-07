@@ -6,13 +6,13 @@ import EditorView from './components/EditorView'
 import { NewDocumentView } from './components/NewDocumentView'
 import { Document } from './types'
 
-const LANGUAGES = [
-    { id: 'javascript', label: 'JavaScript' },
-    { id: 'typescript', label: 'TypeScript' },
-    { id: 'json', label: 'JSON' },
-    { id: 'python', label: 'Python' },
-    { id: 'text', label: 'Text' }
-]
+// const LANGUAGES = [
+//     { id: 'javascript', label: 'JavaScript' },
+//     { id: 'typescript', label: 'TypeScript' },
+//     { id: 'json', label: 'JSON' },
+//     { id: 'python', label: 'Python' },
+//     { id: 'text', label: 'Text' }
+// ]
 
 export default function App() {
     return (
@@ -28,7 +28,7 @@ function AppContent() {
     const [activeLanguage, setActiveLanguage] = useState<string | undefined>(undefined)
     const [showCreate, setShowCreate] = useState(false)
     const [newTitle, setNewTitle] = useState('Untitled')
-    const [newLang, setNewLang] = useState('javascript')
+    const [newLang, setNewLang] = useState('.js')
     //const [activeDoc, setActiveDoc] = useState<any | null>(null)
     const url = new URL(window.location.href)
     const idFromUrl = url.searchParams.get('id')

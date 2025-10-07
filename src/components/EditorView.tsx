@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import Editor, { Monaco } from '@monaco-editor/react'
-import { Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, FormControl, FormLabel, Text, Input, Card, CardHeader, CardBody, Heading, Divider, Stack, Box } from "@chakra-ui/react"
+import { Modal, ModalBody, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalOverlay, FormControl, FormLabel, Text, Input, Card, CardHeader, CardBody, Heading, Divider, Stack, Box, Spinner } from "@chakra-ui/react"
 import { Button } from "./ui/button"
+import { Popover, PopoverTrigger, PopoverContent, PopoverBody, PopoverArrow } from "@chakra-ui/react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import type * as MonacoEditor from 'monaco-editor'
 import type * as monaco from "monaco-editor"
@@ -16,11 +17,12 @@ import PixelBlast from './ui/PixelBlast';
 import Dither from './ui/Dither';
 
 const LANGUAGES = [
-    { id: '.js', label: '.js' },
-    { id: '.ts', label: '.ts' },
-    { id: '.json', label: '.json' },
-    { id: '.py', label: '.py' },
-    { id: '.txt', label: '.txt' }
+    { id: 'javascript', label: '.js' },
+    { id: 'typescript', label: '.ts' },
+    { id: 'json', label: '.json' },
+    { id: 'python', label: '.py' },
+    { id: 'plaintext', label: '.txt' },
+    { id: 'java', label: '.java' }
 ]
 
 function debounce<T extends (...args: any[]) => void>(fn: T, wait = 300) {
@@ -45,7 +47,8 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     const [loading, setLoading] = useState<boolean>(true)
     const [connected, setConnected] = useState<boolean>(false)
     const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
-    const [isContentSynced, setIsContentSynced] = useState<boolean>(true)
+    // const [isContentSynced, setIsContentSynced] = useState<boolean>(true)
+    const [isSynced, setIsSynced] = useState<boolean>(true)
 
     const [username, setUsername] = useState("");
     const [showDialog, setShowDialog] = useState(true);
@@ -55,6 +58,9 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     const decorationsRef = useRef<Record<string, string[]>>({});
     // new ref for disposing cursor listener
     const cursorListenerRef = useRef<{ dispose: () => void } | null>(null);
+    const languageLabel = LANGUAGES.find(l => l.id === language)?.label || language;
+    const snapshotSeqRef = useRef(0);
+    const lastAckedSeqRef = useRef(0);
 
 
     const wsRef = useRef<ReturnType<typeof getGlobalWS> | null>(null);
@@ -88,12 +94,18 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
             }));
             console.log(`Sending snapshot #${snapshotCount} with content length:`, contentRef.current.length);
             console.log('Current users:', formattedUsers);
+
+            snapshotSeqRef.current += 1;
+            const seq = snapshotSeqRef.current;
+            console.log("current sequence ID " + seq)
             wsRef.current?.sendSnapshotUpdate(id, {
                 content: contentRef.current,
-                users: formattedUsers
+                users: formattedUsers,
+                seq,
+
             });
             setLastSyncTime(Date.now());
-            setIsContentSynced(true);
+            setIsSynced(false); // Mark as not synced after sending
         }, 5000);
 
         // Clean up interval on unmount or when connection/username changes
@@ -277,6 +289,18 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                         });
                     }
                     break;
+                }
+
+                case "ack": {
+                    console.log("received ack")
+                    if (msg.seq && msg.event === "snapshot") {
+                        console.log("updating last acked")
+                        lastAckedSeqRef.current = msg.seq
+                        console.log(lastAckedSeqRef.current)
+                        console.log(snapshotSeqRef.current)
+                        // Update sync status when we receive ack
+                        setIsSynced(lastAckedSeqRef.current === snapshotSeqRef.current);
+                    }
                 }
             }
         };
@@ -502,7 +526,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         const newContent = value || ''
         const oldContent = content
         setContent(newContent)
-        setIsContentSynced(false)
+        setIsSynced(false)
         console.log(content)
 
         // compute diffs using local simpleDiff and emit Operation messages
@@ -558,19 +582,15 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     }
 
     const handleShare = async () => {
-        const url = new URL(window.location.href)
-        url.searchParams.set("id", id)
-        const href = url.toString()
+        const url = new URL(window.location.href);
+        url.searchParams.set("id", id);
+        const href = url.toString();
         setShowCopySuccess(true);
-        setTimeout(() => setShowCopySuccess(false), 2000); // Reset after 2 seconds
+        setTimeout(() => setShowCopySuccess(false), 1500); // Reset after 1.5 seconds
         try {
-            await navigator.clipboard.writeText(href)
-            // small visual feedback
-            // you may replace alert with your toast if you have one
+            await navigator.clipboard.writeText(href);
         } catch (err) {
-            // fallback: show URL in prompt for manual copy
-            // eslint-disable-next-line no-alert
-            window.prompt("Copy link to share:", href)
+            window.prompt("Copy link to share:", href);
         }
     }
 
@@ -710,9 +730,25 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     </div>
 
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <div style={{ color: connected ? "#27e07a" : "#f6c85f", fontWeight: 700, fontSize: 13 }}>
-                            {connected ? "connected" : "connecting..."}
-                        </div>
+                        {/* <div style={{ color: connected ? "#27e07a" : "#f6c85f", fontWeight: 700, fontSize: 13 }}>
+                            {connected ? "Connected" : "Connecting..."}
+                        </div> */}
+                        <Box
+                            display="inline-flex"
+                            alignItems="center"
+                            px={4}
+                            py={2}
+                            bg="#1e1e1e" // or use a Chakra color like "blue.600"
+                            border="1px solid"
+                            borderColor="whiteAlpha.200"
+                            color="white"
+                            borderRadius="full"
+                            fontWeight="semibold"
+                            fontSize="md"
+                            boxShadow="md"
+                        >
+                            {connected ? "Connected" : "Connecting..."}
+                        </Box>
                         <Button onClick={handleShare} variant="outline" className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">Share</Button>
                     </div>
                 </div>
@@ -769,6 +805,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         setShowDialog(false);
     }
 
+
     return (
 
         <div style={outerContainerStyle}>
@@ -814,61 +851,116 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     <div style={headerStyle}>
                         <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
                             <div>
-                                <div style={{ color: "#ffffff", fontSize: 34, fontWeight: 'bold', fontFamily: 'Inter, Helvetica, Arial, sans-serif', }}>{title ? (title + language) : "Untitled"}</div>
+                                <div style={{ color: "#ffffff", fontSize: 34, fontWeight: 'bold', fontFamily: 'Inter, Helvetica, Arial, sans-serif', }}>{title ? (title + languageLabel) : "Untitled"}</div>
                             </div>
                         </div>
                         {/* right side: connection status + sleek share button */}
-                        <div style={{ marginLeft: "auto", display: "flex", gap: 32, alignItems: "center" }}>
+                        <div style={{ marginLeft: "auto", marginRight: "36px", display: "flex", gap: 32, alignItems: "center" }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-                                <div style={{ color: connected ? "#27e07a" : "#f6c85f", fontWeight: 600, fontSize: 13, fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}>
-                                    {connected ? "connected" : "connecting..."}
-                                </div>
+                                <Box
+                                    display="inline-flex"
+                                    alignItems="center"
+                                    px={4}
+                                    py={1}
+                                    bg="#27e07a" // or use a Chakra color like "blue.600"
+                                    border="1px solid"
+                                    borderColor="whiteAlpha.200"
+                                    color="white"
+                                    borderRadius="full"
+                                    fontWeight="semibold"
+                                    fontSize="md"
+                                    boxShadow="md"
+                                    style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 500, fontSize: 13 }}
+                                >
+                                    {connected ? "Connected" : "Connecting..."}
+                                </Box>
                                 {connected && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 13 }}>
-                                        {isContentSynced ? (
+                                        {isSynced ? (
                                             <>
-                                                <span style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 600 }}>✓ synced</span>
+                                                <Box
+                                                    display="inline-flex"
+                                                    alignItems="center"
+                                                    px={4}
+                                                    py={1}
+                                                    bg="#1e1e1e" // or use a Chakra color like "blue.600"
+                                                    border="1px solid"
+                                                    borderColor="whiteAlpha.200"
+                                                    color="white"
+                                                    borderRadius="full"
+                                                    fontWeight="semibold"
+                                                    fontSize="md"
+                                                    boxShadow="md"
+                                                    style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 500, fontSize: 13 }}
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle', marginRight: '4px' }}>
+                                                        <path d="M4 8.5L7 11.5L12 5.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                    <span style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 500, fontSize: 13 }}>Synced</span>
+                                                </Box>
                                             </>
                                         ) : (
                                             <>
-                                                <span style={{ color: '#f6c85f', display: 'inline-flex', animation: 'spin 1s linear infinite' }}>↻</span>
-                                                <style>{`
-                                                            @keyframes spin {
-                                                                from { transform: rotate(0deg); }
-                                                                to { transform: rotate(360deg); }
-                                                            }
-                                                        `}</style>
+                                                <Box
+                                                    display="inline-flex"
+                                                    alignItems="center"
+                                                    px={4}
+                                                    py={1}
+                                                    bg="#1e1e1e" // or use a Chakra color like "blue.600"
+                                                    border="1px solid"
+                                                    borderColor="whiteAlpha.200"
+                                                    color="white"
+                                                    borderRadius="full"
+                                                    fontWeight="semibold"
+                                                    fontSize="md"
+                                                    boxShadow="md"
+                                                    style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 500, fontSize: 13 }}
+                                                >
+                                                    <Spinner size='xs' style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                                                    <span style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 500, fontSize: 13 }}>Syncing</span>
+                                                </Box>
                                             </>
                                         )}
                                     </div>
                                 )}
+
+                                <Popover isOpen={showCopySuccess} placement="top" closeOnBlur={false} isLazy>
+                                    <PopoverTrigger>
+                                        <Button
+                                            onClick={handleShare}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="p-1 h-auto w-7 hover:bg-white/10 text-[#cccccc] transition-all duration-200"
+                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <div style={{
+                                                width: '16px',
+                                                height: '16px',
+                                                color: showCopySuccess ? '#73c991' : '#cccccc',
+                                                transition: 'color 0.2s'
+                                            }}>
+                                                {showCopySuccess ? (
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M13.3333 4L6 11.3333L2.66667 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                ) : (
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M3.33333 8V12.6667C3.33333 13.403 3.93 14 4.66667 14H11.3333C12.07 14 12.6667 13.403 12.6667 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                                        <path d="M8 2V10M8 2L5.33333 4.66667M8 2L10.6667 4.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent width="auto" bg="#1e1e1e" borderRadius="full" p={0} borderColor="#ffffff1a">
+                                        <PopoverBody px={3} py={2} color="#fff" fontWeight="bold" fontSize="sm" textAlign="center" borderRadius="full" style={{ color: '#fff', fontFamily: 'Inter, Helvetica, Arial, sans-serif', fontWeight: 500, fontSize: 13 }}>
+                                            Link Copied
+                                        </PopoverBody>
+                                    </PopoverContent>
+                                </Popover>
+
                             </div>
-                            <Button
-                                onClick={handleShare}
-                                variant="ghost"
-                                size="sm"
-                                className="p-1 h-auto w-7 hover:bg-white/10 text-[#cccccc] transition-all duration-200"
-                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >
-                                <div style={{
-                                    width: '16px',
-                                    height: '16px',
-                                    color: showCopySuccess ? '#73c991' : '#cccccc',
-                                    transition: 'color 0.2s'
-                                }}>
-                                    {showCopySuccess ? (
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M13.3333 4L6 11.3333L2.66667 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    ) : (
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M3.33333 8V12.6667C3.33333 13.403 3.93 14 4.66667 14H11.3333C12.07 14 12.6667 13.403 12.6667 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                                            <path d="M8 2V10M8 2L5.33333 4.66667M8 2L10.6667 4.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    )}
-                                </div>
-                            </Button>
                         </div>
                     </div>
                 </div>
@@ -899,6 +991,28 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                             theme: 'vs-dark'
                         }}
                     />
+
+                    <button
+                        onClick={async () => {
+                            const value = editorRef.current?.getValue?.() ?? "";
+                            await navigator.clipboard.writeText(value);
+                            setShowCopySuccess(true);
+                            setTimeout(() => setShowCopySuccess(false), 1200);
+                        }}
+                        style={copyButtonStyle}
+                        title="Copy code"
+                    >
+                        {showCopySuccess ? (
+                            <svg width="24" height="24" viewBox="0 0 20 20" fill="none">
+                                <path d="M5 10.5L9 14L15 7" stroke="#73c991" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        ) : (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M17.5 14H19C20.1046 14 21 13.1046 21 12V5C21 3.89543 20.1046 3 19 3H12C10.8954 3 10 3.89543 10 5V6.5M5 10H12C13.1046 10 14 10.8954 14 12V19C14 20.1046 13.1046 21 12 21H5C3.89543 21 3 20.1046 3 19V12C3 10.8954 3.89543 10 5 10Z" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        )}
+                    </button>
+
                     {language && (
                         <select
                             value={language}
@@ -989,7 +1103,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     </Box>
                 </div>
             </div>
-        </div>
+        </div >
 
     )
 }
@@ -1144,21 +1258,39 @@ const shareButtonStyle: React.CSSProperties = {
 
 const languageDropdownStyle: React.CSSProperties = {
     position: "absolute",
-    right: 1,
-    top: 1,
+    right: "0.4rem",
+    top: "0.4rem",
     background: "rgba(255,255,255,0.04)",
-    color: "#9fb8d6",
-    padding: "6px 10px",
-    borderRadius: 8,
-    fontSize: 12,
+    color: "#fff",
+    padding: "0.4rem 0.8rem",
+    borderRadius: "0.5rem",
+    fontSize: "0.95rem",
     border: "none",
     cursor: "pointer",
-    boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+    boxShadow: "0 0.25rem 0.9rem rgba(0,0,0,0.18)",
     appearance: "none",
     fontFamily: "'Cascadia Code', monospace",
     zIndex: 1000,
     pointerEvents: "auto"
 };
+
+const copyButtonStyle: React.CSSProperties = {
+    position: "absolute",
+    right: "6.2rem",
+    top: "0.4rem",
+    background: "rgba(255,255,255,0.04)",
+    color: "#9fb8d6",
+    padding: "0.4rem 0.8rem",
+    borderRadius: "0.5rem",
+    fontSize: "0.95rem",
+    border: "none",
+    cursor: "pointer",
+    boxShadow: "0 0.25rem 0.9rem rgba(0,0,0,0.18)",
+    appearance: "none",
+    fontFamily: "'Cascadia Code', monospace",
+    zIndex: 1000,
+    pointerEvents: "auto"
+}
 
 const modalOverlayStyle: React.CSSProperties = {
     position: 'fixed',

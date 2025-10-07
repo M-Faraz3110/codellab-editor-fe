@@ -77,6 +77,7 @@ class WSClient {
   }
 
   sendDocumentUpdate(id: string, update: { title?: string | null; language?: string | null }): void {
+    console.log("sending document update")
     this.send({
       type: 'document_update',
       id,
@@ -85,11 +86,12 @@ class WSClient {
     });
   }
 
-  sendSnapshotUpdate(id: string, update: { content?: string | null, users?: Array<{ id: string; username: string }> }): void {
-    console.log("sending snapshot")
+  sendSnapshotUpdate(id: string, update: { content?: string | null, users?: Array<{ id: string; username: string }>, seq?: number }): void {
     console.log(update.users)
-    if (update.content && update.users) {
-      this.send({ type: 'snapshot', id, content: update.content, users: update.users })
+    console.log(update.seq)
+    if (update.content && update.users && update.seq) {
+      console.log("sending snapshot")
+      this.send({ type: 'snapshot', id, content: update.content, users: update.users, seq: update.seq })
     }
   }
 

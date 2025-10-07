@@ -27,10 +27,11 @@ export type WSMessage =
   | { type: 'init_ok'; id: string; username: string }
   | { type: 'operation'; id: string; operation: Operation }
   | { type: 'document_update'; id: string; title: string | null, language: string | null }
-  | { type: 'snapshot'; id: string; content: string; title?: string; language?: string; users: Array<{ id: string; username: string }> }
+  | { type: 'snapshot'; id: string; content: string; title?: string; language?: string; users: Array<{ id: string; username: string }>; seq?: number }
   | { type: 'presence_user'; id: string; username: string; color?: string; lineNumber?: number; column?: number }
   | { type: 'user_joined'; id: string; username: string }
-  | { type: 'user_left'; id: string; username: string}
+  | { type: 'user_left'; id: string; username: string }
+  | { type: 'ack';  event: string, seq: number}
 export type DocumentUpdate = {
   title?: string | null
   content?: string | null
