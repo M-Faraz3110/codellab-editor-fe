@@ -474,11 +474,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
         }
     }
 
-    // add deterministic small id
-    function genShortId() {
-        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    }
-
     // Generate a highly unique color from string
     function colorFromString(s: string) {
         // Use different parts of string for different components
@@ -611,7 +606,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                 isCentered
             >
                 <ModalOverlay
-                    bg="rgba(0, 0, 0, 0.6)"
+                    bg="rgba(0, 0, 0, 0.9)"
                     backdropFilter="blur(4px)"
                 />
                 <ModalContent
@@ -626,7 +621,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                         fontSize="lg"
                         fontWeight="600"
                         pb={2}
-                        fontFamily="'Cascadia Code', monospace"
+                        fontFamily='Inter, Helvetica, Arial, sans-serif'
                     >
                         Join Collaboration
                     </ModalHeader>
@@ -639,7 +634,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                             color="rgba(255, 255, 255, 0.7)"
                             fontSize="sm"
                             mb={4}
-                            fontFamily="'Cascadia Code', monospace"
+                            fontFamily='Inter, Helvetica, Arial, sans-serif'
                         >
                             Enter your username to join the coding session
                         </Text>
@@ -661,7 +656,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                                     borderColor: "#007acc",
                                     boxShadow: "0 0 0 1px #007acc"
                                 }}
-                                fontFamily="'Cascadia Code', monospace"
+                                fontFamily='Inter, Helvetica, Arial, sans-serif'
                                 width="100%"
                                 maxWidth="100%"
                                 boxSizing="border-box"
@@ -701,7 +696,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                                 boxShadow: username.trim() ? '0 0 15px rgba(255, 255, 255, 0.1), inset 0 0 15px rgba(255, 255, 255, 0.1)' : '0 0 5px rgba(255, 255, 255, 0.05)',
                                 border: username.trim() ? '2px solid rgba(255, 255, 255, 0.2)' : '2px solid rgba(255, 255, 255, 0.1)',
                                 color: 'white',
-                                fontFamily: "'Cascadia Code', monospace",
+                                fontFamily: 'Inter, Helvetica, Arial, sans-serif',
                                 fontSize: '14px'
                             }}
                         >
@@ -1111,8 +1106,7 @@ const outerContainerStyle: React.CSSProperties = {
     minHeight: "100vh",
     display: "flex",
     flexDirection: "column",
-    fontFamily:
-        "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace",
+    fontFamily: 'Inter, Helvetica, Arial, sans-serif',
     boxSizing: "border-box",
     height: "100%"
 }
@@ -1196,8 +1190,7 @@ const textareaStyle: React.CSSProperties = {
     color: "#e6eef6",
     padding: "1rem",
     borderRadius: 8,
-    fontFamily:
-        "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace",
+    fontFamily: 'Inter, Helvetica, Arial, sans-serif',
     fontSize: 14,
     lineHeight: 1.45,
     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
