@@ -273,7 +273,7 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => v
                                     overflow: 'hidden'
                                 }}
                             >
-                                {['.js', '.ts', '.py', '.json'].map((ext) => (
+                                {['.js', '.ts', '.py', '.json', '.java'].map((ext) => (
                                     <div
                                         key={ext}
                                         onClick={() => {
@@ -287,7 +287,8 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => v
                                             cursor: 'pointer',
                                             color: '#d4d4d4',
                                             backgroundColor: ext === language ? '#2a2a3f' : 'transparent',
-                                            transition: 'background-color 0.2s'
+                                            transition: 'background-color 0.2s',
+                                            fontFamily: "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace"
                                         }}
                                         onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
                                             e.currentTarget.style.backgroundColor = '#2a2a3f';
