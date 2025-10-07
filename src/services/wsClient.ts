@@ -89,7 +89,7 @@ class WSClient {
   sendSnapshotUpdate(id: string, update: { content?: string | null, users?: Array<{ id: string; username: string }>, seq?: number }): void {
     console.log(update.users)
     console.log(update.seq)
-    if (update.content && update.users && update.seq) {
+    if (update.content != null && update.users && update.seq) {
       console.log("sending snapshot")
       this.send({ type: 'snapshot', id, content: update.content, users: update.users, seq: update.seq })
     }

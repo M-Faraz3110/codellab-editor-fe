@@ -47,6 +47,14 @@ const glowStyles = `
   }
 `;
 
+const LANGUAGES = [
+    { id: 'javascript', label: '.js' },
+    { id: 'typescript', label: '.ts' },
+    { id: 'json', label: '.json' },
+    { id: 'python', label: '.py' },
+    { id: 'plaintext', label: '.txt' },
+    { id: 'java', label: '.java' }
+]
 
 export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => void }) {
     const [title, setTitle] = useState("")
@@ -61,8 +69,10 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => v
         e.preventDefault()
         setCreating(true)
         try {
-            console.log("language " + language)
-            const doc = await createDocument({ title, language, content: "" })
+            // Convert label back to language ID for the API
+            const languageId = LANGUAGES.find(lang => lang.label === language)?.id || 'javascript'
+            console.log("language " + languageId)
+            const doc = await createDocument({ title, language: languageId, content: "" })
             const url = new URL(window.location.href)
             url.searchParams.set("id", doc.id)
             window.history.replaceState(null, "", url.toString())
@@ -273,11 +283,11 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => v
                                     overflow: 'hidden'
                                 }}
                             >
-                                {['.js', '.ts', '.py', '.json', '.java'].map((ext) => (
+                                {LANGUAGES.map((lang) => (
                                     <div
-                                        key={ext}
+                                        key={lang.id}
                                         onClick={() => {
-                                            setLanguage(ext);
+                                            setLanguage(lang.label);
                                             setIsDropdownOpen(false);
                                         }}
                                         style={{
@@ -286,7 +296,7 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => v
                                             textAlign: 'center',
                                             cursor: 'pointer',
                                             color: '#d4d4d4',
-                                            backgroundColor: ext === language ? '#2a2a3f' : 'transparent',
+                                            backgroundColor: lang.label === language ? '#2a2a3f' : 'transparent',
                                             transition: 'background-color 0.2s',
                                             fontFamily: "'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace"
                                         }}
@@ -294,10 +304,10 @@ export function NewDocumentView({ onCreated }: { onCreated: (doc: Document) => v
                                             e.currentTarget.style.backgroundColor = '#2a2a3f';
                                         }}
                                         onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
-                                            e.currentTarget.style.backgroundColor = ext === language ? '#2a2a3f' : 'transparent';
+                                            e.currentTarget.style.backgroundColor = lang.label === language ? '#2a2a3f' : 'transparent';
                                         }}
                                     >
-                                        {ext}
+                                        {lang.label}
                                     </div>
                                 ))}
                             </div>
