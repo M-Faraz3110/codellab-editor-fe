@@ -47,7 +47,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     const [loading, setLoading] = useState<boolean>(true)
     const [connected, setConnected] = useState<boolean>(false)
     const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
-    // const [isContentSynced, setIsContentSynced] = useState<boolean>(true)
     const [isSynced, setIsSynced] = useState<boolean>(true)
 
     const [username, setUsername] = useState("");
@@ -56,7 +55,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
     const [users, setUsers] = useState<PresenceUser[]>([]);
     const [meId, setMeId] = useState<string>('');
     const decorationsRef = useRef<Record<string, string[]>>({});
-    // new ref for disposing cursor listener
     const cursorListenerRef = useRef<{ dispose: () => void } | null>(null);
     const languageLabel = LANGUAGES.find(l => l.id === language)?.label || language;
     const snapshotSeqRef = useRef(0);
@@ -266,10 +264,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     break;
                 }
                 case "document_update": {
-                    // Operational updates from other users
-                    // if (msg.id === id && typeof msg.content === "string") {
-                    //     setContent(msg.content);
-                    // }
                     break;
                 }
 
@@ -730,9 +724,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                     </div>
 
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        {/* <div style={{ color: connected ? "#27e07a" : "#f6c85f", fontWeight: 700, fontSize: 13 }}>
-                            {connected ? "Connected" : "Connecting..."}
-                        </div> */}
                         <Box
                             display="inline-flex"
                             alignItems="center"
@@ -833,16 +824,6 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
                 bottom: 0,
                 zIndex: 0,
             }}>
-                {/* <Dither
-                    waveColor={[0.3, 0.4, 0.8]}
-                    disableAnimation={false}
-                    enableMouseInteraction={false}
-                    colorNum={4}
-                    waveAmplitude={0.0}
-                    waveFrequency={0.5}
-                    waveSpeed={0.05}
-                    pixelSize={3}
-                /> */}
             </div>
 
             <div style={{ display: 'flex', minHeight: 0 }}>
@@ -1109,14 +1090,7 @@ export default function EditorView({ id, initialContent, initialLanguage }: { id
 }
 
 function getClientId(): string {
-    // simple client id stored in localStorage
     const id = cryptoRandomId()
-    // const key = 'collab_client_id'
-    // let id = localStorage.getItem(key)
-    // if (!id) {
-    //     id = cryptoRandomId()
-    //     localStorage.setItem(key, id)
-    // }
     return id
 }
 
